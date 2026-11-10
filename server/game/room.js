@@ -18,6 +18,7 @@ export function createRoomScope(ctx, roomId) {
   function state() {
     const s = q.room.get(roomId)
     if (!s) throw new GameError('no-room', 'Phòng không còn tồn tại', 404)
+    if (s.mode === 'tram' && s.status === 'running') tram.tick() // luật cứu ở nửa thời lượng
     // Hết giờ: tự kết thúc ở lần đọc trạng thái kế tiếp
     if (s.status === 'running' && s.ends_at && now() >= s.ends_at) {
       transaction(db, () => {
@@ -78,11 +79,11 @@ export function createRoomScope(ctx, roomId) {
   }
 
   const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps }
+  const tram = createTram(rctx)
   const questions = createQuestions(rctx)
-  const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions })
+  const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions, tram })
   const { startShared, voteShared, settleShared, closeShared, sharedPublic } = createShared({ ...rctx, ...questions })
   const { journal, scores, teamView, screenView, ownerView, replay, news } = createViews({ ...rctx, ...questions, choiceFor, siegeBlock, sharedPublic })
-  const tram = createTram(rctx)
   const owner = createOwner({ ...rctx, scores, recordBoard, tram })
   const { spawnSolo } = owner
   const { kickPlayer, renamePlayer, leave, releaseHost, start, pause, end, reset, triggerEvent, adjustScore, setTopicChoice, setBetChoice } = owner

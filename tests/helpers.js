@@ -67,6 +67,13 @@ export function placeTeam(db, teamId, provinceId, { owned = false } = {}) {
   }
 }
 
+// Sửa teams.tram trực tiếp (dựng tình huống test Chạy trạm): gộp `patch` vào trạng thái hiện có
+export function setTram(db, teamId, patch) {
+  const cur = JSON.parse(db.prepare('SELECT tram FROM teams WHERE id = ?').get(teamId).tram)
+  db.prepare('UPDATE teams SET tram = ? WHERE id = ?').run(JSON.stringify({ ...cur, ...patch }), teamId)
+}
+export const getTram = (db, teamId) => JSON.parse(db.prepare('SELECT tram FROM teams WHERE id = ?').get(teamId).tram)
+
 export function clearOwnership(db) {
   db.exec('DELETE FROM ownership')
 }

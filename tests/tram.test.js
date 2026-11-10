@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadTramContent } from '../server/game/tram-content.js'
 import { tramFixture, tramFixtureWith } from './fixtures/tram-content.js'
-import { setupGame, createCore, memoryDb, placeTeam, correctAnswer, wrongAnswer, seededRandom } from './helpers.js'
+import { setupGame, createCore, memoryDb, placeTeam, setTram, getTram, correctAnswer, wrongAnswer, seededRandom } from './helpers.js'
 import { placeKeys } from '../server/game/tram.js'
 import { GameError } from '../server/game/rules.js'
 
@@ -76,8 +76,8 @@ test('tạo phòng tram: từ chối tham số và nội dung không đủ', () 
 })
 
 // Dựng phòng tram: team đứng ở `from` đã có tem (không qua ownership)
-function tramAt(from, teamCount = 2) {
-  const g = setupGame({ mode: 'tram', teamCount })
+function tramAt(from, teamCount = 2, opts = {}) {
+  const g = setupGame({ mode: 'tram', teamCount, ...opts })
   g.db.exec('DELETE FROM stamps')
   for (const t of g.teams) {
     placeTeam(g.db, t.id, from)
@@ -214,4 +214,112 @@ test('phòng tram: pause/resume chạy được (gọi shift)', () => {
   g.now.advance(5000)
   g.game.resume()
   assert.equal(g.game.state().status, 'running')
+})
+
+// ---------- Gợi ý, nhặt key, luật cứu, mở map ----------
+const mkKeys = (list) => list.map(([province, extra = {}], i) => ({ province, piece: i, hint: 0, hintAt: null, found: false, foundAt: null, ...extra }))
+const FAR = ['ca-mau', 'lang-son', 'can-tho', 'dong-nai']
+
+test('tram: 3 tỉnh đúng -> 1 gợi ý trỏ tới key gần nhất (BFS)', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  setTram(g.db, t, { keys: mkKeys([['ca-mau'], ['nghe-an'], ['lang-son'], ['can-tho'], ['dong-nai']]) })
+  const answerAt = to => {
+    const { question } = g.game.move(t, to)
+    g.game.answer(t, question.id, correctAnswer(g.db, t))
+    g.now.advance(60_000)
+  }
+  answerAt('quang-tri')
+  g.game.move(t, 'hue'); answerAt('da-nang')
+  assert.equal(getTram(g.db, t).hints.length, 0) // mới 2 tỉnh đúng
+  g.game.move(t, 'hue'); g.game.move(t, 'quang-tri'); answerAt('ha-tinh')
+  const st = getTram(g.db, t)
+  assert.equal(st.correct, 3)
+  assert.equal(st.hints.length, 1)
+  assert.equal(st.hints[0].key, 1)
+  assert.equal(st.hints[0].level, 1)
+  assert.equal(st.keys[1].hint, 1)
+})
+
+test('tram: hết key chưa gợi ý -> mốc sau cho mức 2 của key gợi ý sớm nhất', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  setTram(g.db, t, {
+    correct: 2,
+    keys: mkKeys([['ca-mau', { hint: 1, hintAt: 100 }], ['lang-son', { hint: 1, hintAt: 50 }], ['can-tho', { hint: 1, hintAt: 200 }], ['dong-nai', { found: true }], ['gia-lai', { found: true }]]),
+  })
+  const { question } = g.game.move(t, 'quang-tri')
+  const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
+  const st = getTram(g.db, t)
+  assert.equal(st.hints.length, 1)
+  assert.equal(st.hints[0].key, 1)
+  assert.equal(st.hints[0].level, 2)
+  assert.equal(st.keys[1].hint, 2)
+  assert.equal(r.tram.hint.level, 2)
+})
+
+test('tram: đúng ở tỉnh có key -> nhặt; sai thì không, retry + đúng -> nhặt', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  setTram(g.db, t, { keys: mkKeys([['quang-tri'], ...FAR.map(p => [p])]) })
+  const first = g.game.move(t, 'quang-tri')
+  g.game.answer(t, first.question.id, wrongAnswer(g.db, t))
+  assert.equal(getTram(g.db, t).keys[0].found, false)
+  g.now.advance(31_000)
+  const again = g.game.retry(t)
+  const r = g.game.answer(t, again.question.id, correctAnswer(g.db, t))
+  const st = getTram(g.db, t)
+  assert.equal(st.keys[0].found, true)
+  assert.equal(r.tram.key.piece, tramFixture.periods.get(st.period).puzzle.splits[st.need][st.keys[0].piece])
+})
+
+test('tram: nhặt key cuối -> mở map, cộng điểm các tỉnh chưa ghé (tỉnh ghé mà sai không được cộng)', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  g.db.exec('DELETE FROM visits')
+  g.db.prepare('INSERT INTO visits (team_id, province_id) VALUES (?, ?)').run(t, 'hue')
+  setTram(g.db, t, { keys: mkKeys([['quang-tri'], ...FAR.map(p => [p, { found: true }])]) })
+  const w = g.game.move(t, 'da-nang')
+  g.game.answer(t, w.question.id, wrongAnswer(g.db, t))
+  g.now.advance(31_000)
+  g.game.move(t, 'hue')
+  const { question } = g.game.move(t, 'quang-tri')
+  const before = g.bonus(t)
+  const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
+  const visited = new Set(['hue', 'da-nang', 'quang-tri'])
+  const free = g.db.prepare('SELECT id, points FROM provinces').all().filter(p => !visited.has(p.id)).reduce((s, p) => s + p.points, 0)
+  const st = getTram(g.db, t)
+  assert.equal(st.stage, 'special')
+  assert.ok(st.openedAt)
+  assert.equal(st.free, free)
+  assert.equal(r.tram.opened.free, free)
+  assert.equal(g.bonus(t) - before, free)
+  // đã mở map: không đi, không trả lời lại ở tỉnh
+  for (const fn of [() => g.game.move(t, 'hue'), () => g.game.retry(t), () => g.game.retreat(t)]) {
+    assert.throws(fn, e => e instanceof GameError && e.code === 'tram-map')
+  }
+})
+
+test('tram: luật cứu ở nửa thời lượng, mốc dời theo tạm dừng', () => {
+  const g = tramAt('hue', 2, { durationMin: 30 })
+  const t = g.teams[0].id
+  setTram(g.db, t, { keys: mkKeys([['ca-mau', { found: true }], ['lang-son'], ['can-tho'], ['dong-nai', { hint: 1, hintAt: 5 }], ['gia-lai']]) })
+  const min = 60_000
+  g.now.advance(14 * min)
+  g.game.state()
+  assert.equal(getTram(g.db, t).rescued, false)
+  g.game.pause()
+  g.now.advance(5 * min)
+  g.game.resume()
+  g.now.advance(30_000)
+  g.game.state()
+  assert.equal(getTram(g.db, t).rescued, false) // chạy được 14,5 phút
+  g.now.advance(min)
+  g.game.state()
+  const st = getTram(g.db, t)
+  assert.equal(st.rescued, true)
+  assert.deepEqual(st.keys.map(k => k.hint), [0, 1, 1, 1, 1])
+  assert.equal(st.hints.length, 3)
+  const all = g.teams.map(x => getTram(g.db, x.id).rescued)
+  assert.deepEqual(all, [true, true])
 })

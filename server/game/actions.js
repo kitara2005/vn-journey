@@ -7,15 +7,21 @@ import { RULES, REGIONS, CARD_KINDS, SOLO_CARD_KINDS, HELP_CARDS, GameError } fr
 export function createActions(ctx) {
   const {
     db, q, now, random, json, provinces, adjacency, topicNames, timedOut, roomId,
-    log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps,
+    tram, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps,
     issueQuestion, isCorrect, correctAnswerText, addAnswerTime, saveResult, shuffled,
   } = ctx
+
+  // Phòng tram: đã mở map đặc biệt thì không đi lại / trả lời câu tỉnh nữa
+  function requireTramMap(t) {
+    if (isTram() && json(t.tram)?.stage !== 'map') throw new GameError('tram-map', 'Đội đã mở map đặc biệt', 409)
+  }
 
   // ---------- Hành động của team ----------
   function move(teamId, provinceId, by = null) {
     requireRunning()
     const t = requireTeam(teamId)
     requireIdle(t)
+    requireTramMap(t)
     if (!provinces.has(provinceId)) throw new GameError('bad-province', 'Tỉnh không tồn tại')
     if (provinceId === t.current_province) throw new GameError('same-province', 'Team đang ở tỉnh này')
 
@@ -80,6 +86,7 @@ export function createActions(ctx) {
     requireRunning()
     const t = requireTeam(teamId)
     requireIdle(t)
+    requireTramMap(t)
     if (!t.current_province) throw new GameError('no-province', 'Team chưa có vị trí trên bản đồ', 409)
     const owner = q.owner.get(roomId, t.current_province)
     if (owner?.team_id === t.id) throw new GameError('own-province', 'Tỉnh này đã là của đội bạn', 409)
@@ -328,6 +335,7 @@ export function createActions(ctx) {
   function retreat(teamId, by = null) {
     requireRunning()
     const t = requireTeam(teamId)
+    requireTramMap(t)
     if (t.locked_until && t.locked_until > now()) throw new GameError('locked', 'Team đang nghỉ chân', 423)
     // Đang có câu hỏi thì phải "Bỏ qua" (có khóa 10 giây) — không rút lui để né câu hỏi
     if (t.pending_question || t.choosing_at) throw new GameError('pending', 'Đang có câu hỏi — dùng "Bỏ qua" nếu muốn rời tỉnh', 409)
@@ -554,9 +562,11 @@ export function createActions(ctx) {
       }
       // Đúng là được tính chuỗi, kể cả khi tỉnh vừa bị đội khác chiếm trước
       const streak = bumpStreak(t, question.province_id, by)
+      const tramResult = isTram() && captured.captured ? tram.onCorrect(t, question.province_id, by) : null
       const result = {
         correct: true,
         ...captured,
+        ...(tramResult ? { tram: tramResult } : {}),
         ...(round ? { round } : {}),
         penalty,
         golden: !!t.pending_golden,

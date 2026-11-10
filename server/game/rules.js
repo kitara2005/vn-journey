@@ -114,7 +114,7 @@ export const CARD_KINDS = ['scout', 'shield', 'march', ...HELP_CARDS]
 export const SOLO_CARD_KINDS = CARD_KINDS.filter(k => k !== 'shield')
 export const EVENT_KINDS = ['festival', 'storm', 'golden', 'rumor']
 // Các hành động hiện trong nhật ký team
-export const TEAM_LOG_ACTIONS = ['spawn', 'move', 'retry', 'retreat', 'pushed-back', 'topic', 'capture', 'steal', 'wrong', 'siege-fail', 'siege', 'skip', 'card', 'time-penalty', 'streak', 'speed', 'defend', 'defend-fail', 'held', 'repelled', 'home', 'shared-bonus', 'pioneer', 'progress', 'siege-bet', 'duel-round']
+export const TEAM_LOG_ACTIONS = ['spawn', 'move', 'retry', 'retreat', 'pushed-back', 'topic', 'capture', 'steal', 'wrong', 'siege-fail', 'siege', 'skip', 'card', 'time-penalty', 'streak', 'speed', 'defend', 'defend-fail', 'held', 'repelled', 'home', 'shared-bonus', 'pioneer', 'progress', 'siege-bet', 'duel-round', 'tram-key', 'tram-hint', 'tram-open', 'tram-rescue', 'tram-star', 'tram-special', 'tram-finish']
 
 // Xếp hạng: điểm cao hơn trước; bằng điểm thì tổng thời gian trả lời ít hơn trước
 export const byRank = (a, b) => b.total - a.total || a.answerMs - b.answerMs
