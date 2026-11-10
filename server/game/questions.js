@@ -3,7 +3,7 @@
 import { RULES, GameError, normalizeText } from './rules.js'
 
 export function createQuestions(ctx) {
-  const { db, q, now, random, json, activeEvent, roomId, factPool, isSolo, questionLeadMs } = ctx
+  const { db, q, now, random, json, activeEvent, roomId, factPool, isSolo, isTram, tram, questionLeadMs } = ctx
 
   // ---------- Câu hỏi ----------
   function shuffled(n) {
@@ -46,8 +46,13 @@ export function createQuestions(ctx) {
     // Câu đã hiện ở sảnh chờ (lộ đáp án) không phát; tỉnh hết câu thì mới cho lặp lại
     const shown = factSet()
     const fresh = rows => rows.filter(r => !shown.has(r.id))
-    let ids = fresh(ofTopic(q.candidates.all(provinceId, difficulty, teamId)))
-    if (!ids.length) ids = fresh(q.candidates.all(provinceId, difficulty, teamId))
+    // Phòng tram: bỏ câu lộ tên tỉnh cũ ở mọi bước; chỉ khi tỉnh không còn câu nào khác mới đành dùng lại (không để lỗi)
+    const skipOld = isTram() ? new Set(RULES.tramExcluded) : null
+    const ok = rows => (skipOld ? rows.filter(r => !skipOld.has(r.id)) : rows)
+    let ids = ok(fresh(ofTopic(q.candidates.all(provinceId, difficulty, teamId))))
+    if (!ids.length) ids = ok(fresh(q.candidates.all(provinceId, difficulty, teamId)))
+    if (!ids.length) ids = ok(fresh(q.anyCandidates.all(provinceId, difficulty)))
+    if (!ids.length) ids = ok(q.anyCandidates.all(provinceId, difficulty))
     if (!ids.length) ids = fresh(q.anyCandidates.all(provinceId, difficulty))
     if (!ids.length) ids = q.anyCandidates.all(provinceId, difficulty)
     if (!ids.length) throw new GameError('no-question', 'Tỉnh này chưa có câu hỏi', 500)
@@ -96,6 +101,8 @@ export function createQuestions(ctx) {
     // Phòng đơn: trong Câu hỏi vàng lấy câu từ kho thử tài của tỉnh (khó hơn, giờ 45 giây); tỉnh không có thì câu thường
     if (isSolo() && activeEvent()?.kind === 'golden' && q.anyCandidates.all(provinceId, 'siege').length) difficulty = 'siege'
     const question = pickQuestion(t.id, provinceId, difficulty, topic)
+    // Phòng tram: pending_bet = "câu này mang ngôi sao"; sao đang bật thì dùng ngay lúc phát câu (không chờ trả lời)
+    if (isTram() && tram.consumeStar(t.id)) bet = true
     const opts = json(question.options)
     const order = opts ? shuffled(opts.length) : null
     // Câu phát ra trong lúc Câu hỏi vàng thì giữ luật vàng tới khi trả lời xong (kể cả khi sự kiện vừa hết)

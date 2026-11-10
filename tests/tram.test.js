@@ -323,3 +323,99 @@ test('tram: luật cứu ở nửa thời lượng, mốc dời theo tạm dừn
   const all = g.teams.map(x => getTram(g.db, x.id).rescued)
   assert.deepEqual(all, [true, true])
 })
+
+// ---------- Task 6: ngôi sao hy vọng, lọc câu lộ tỉnh cũ ----------
+const starOf = (g, t) => getTram(g.db, t).star
+
+test('tram: bật sao, câu tỉnh đúng ở giây 5 -> tổng tăng 2 lần; sao đã dùng, bật lại báo star-used', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  assert.deepEqual(g.game.armStar(t, true), { star: 'armed' })
+  const { question } = g.game.move(t, 'quang-tri')
+  assert.equal(starOf(g, t), 'used') // dùng ngay lúc phát câu
+  const pts = g.pts('quang-tri')
+  g.now.advance(5000)
+  const before = g.bonus(t)
+  const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
+  assert.equal(r.penalty, 0)
+  assert.equal(g.bonus(t) - before, pts) // phần thêm = điểm tỉnh; điểm gốc đã tính qua tem
+  assert.equal(r.betBonus, pts)
+  assert.throws(() => g.game.armStar(t, true), e => e instanceof GameError && e.code === 'star-used')
+  assert.throws(() => g.game.armStar(t, false), e => e.code === 'star-used')
+})
+
+test('tram: sao + trả lời chậm -> thêm = điểm - phạt tốc độ (tổng tỉnh = 2 x (điểm - phạt))', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  g.game.armStar(t, true)
+  const { question } = g.game.move(t, 'quang-tri')
+  g.now.advance(25_000)
+  const before = g.bonus(t)
+  const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
+  assert.ok(r.penalty > 0)
+  assert.equal(g.bonus(t) - before, -r.penalty + (g.pts('quang-tri') - r.penalty))
+})
+
+test('tram: sao + sai -> trừ điểm gốc, khóa 30 giây', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  g.game.armStar(t, true)
+  const { question } = g.game.move(t, 'quang-tri')
+  const before = g.bonus(t)
+  const r = g.game.answer(t, question.id, wrongAnswer(g.db, t))
+  assert.equal(g.bonus(t) - before, -g.pts('quang-tri'))
+  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(starOf(g, t), 'used')
+})
+
+test('tram: sao + skip -> như sai', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  g.game.armStar(t, true)
+  g.game.move(t, 'quang-tri')
+  const before = g.bonus(t)
+  const r = g.game.skip(t)
+  assert.equal(g.bonus(t) - before, -g.pts('quang-tri'))
+  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(starOf(g, t), 'used')
+})
+
+test('tram: tắt sao trước khi nhận câu -> câu sau tính thường, sao vẫn ready', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  g.game.armStar(t, true)
+  assert.deepEqual(g.game.armStar(t, false), { star: 'ready' })
+  const { question } = g.game.move(t, 'quang-tri')
+  assert.equal(starOf(g, t), 'ready')
+  g.now.advance(5000)
+  const before = g.bonus(t)
+  const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
+  assert.equal(g.bonus(t), before)
+  assert.equal(r.betBonus, 0)
+})
+
+test('tram: phòng tram không bao giờ phát can-tho-02/03; phòng team vẫn phát được', () => {
+  const g = tramAt('vinh-long')
+  const t = g.teams[0].id
+  placeTeam(g.db, t, 'can-tho')
+  const seen = new Set()
+  for (let i = 0; i < 30; i++) {
+    const { question } = g.game.retry(t)
+    seen.add(question.id)
+    g.game.skip(t)
+    g.now.advance(60_000)
+  }
+  assert.ok(seen.size > 0)
+  assert.ok(!seen.has('can-tho-02') && !seen.has('can-tho-03'))
+  const h = setupGame({ teamCount: 2 })
+  const u = h.teams[0].id
+  placeTeam(h.db, u, 'can-tho')
+  const seenTeam = new Set()
+  for (let i = 0; i < 60 && !(seenTeam.has('can-tho-02') && seenTeam.has('can-tho-03')); i++) {
+    const { question } = h.game.retry(u)
+    seenTeam.add(question.id)
+    h.game.skip(u)
+    h.now.advance(60_000)
+  }
+  assert.ok(seenTeam.has('can-tho-02') || seenTeam.has('can-tho-03'))
+})

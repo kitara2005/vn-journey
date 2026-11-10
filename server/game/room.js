@@ -80,7 +80,7 @@ export function createRoomScope(ctx, roomId) {
 
   const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps }
   const tram = createTram(rctx)
-  const questions = createQuestions(rctx)
+  const questions = createQuestions({ ...rctx, tram })
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions, tram })
   const { startShared, voteShared, settleShared, closeShared, sharedPublic } = createShared({ ...rctx, ...questions })
   const { journal, scores, teamView, screenView, ownerView, replay, news } = createViews({ ...rctx, ...questions, choiceFor, siegeBlock, sharedPublic })
@@ -100,6 +100,7 @@ export function createRoomScope(ctx, roomId) {
     teamView, screenView, ownerView, replay, news, journal,
     kickPlayer, renamePlayer, leave, releaseHost, start, pause, resume, end, reset, triggerEvent, adjustScore, setTopicChoice, setBetChoice,
     startShared, voteShared, settleShared, spawnSolo, isSolo, isTram, usesStamps,
+    armStar: (teamId, on, by) => tram.armStar(teamId, on, by),
     questionStats: () => questionStats(roomId),
   }
 }

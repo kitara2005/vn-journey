@@ -441,6 +441,13 @@ export function createActions(ctx) {
 
   // Trả lời sai hoặc hết giờ: khóa (câu vàng: khóa ×2); công thành thì bị đẩy về tỉnh trước; mất chuỗi đúng. Gọi trong transaction.
   // Không lộ đáp án đúng (team khác có thể gặp lại câu này).
+  // Phòng tram: câu mang ngôi sao mà sai / hết giờ / bỏ qua → trừ điểm gốc của tỉnh (khóa giữ 30 giây)
+  function starLost(t, provinceId, by) {
+    const lost = provinces.get(provinceId).points
+    db.prepare('UPDATE teams SET bonus_points = bonus_points - ? WHERE id = ?').run(lost, t.id)
+    log(t.id, 'tram-star', provinceId, { lost }, by)
+  }
+
   function failQuestion(t, question, timeout, by) {
     const isSiege = question.difficulty === 'siege' && !usesStamps() // phòng đơn/tram: câu thử tài chỉ là câu vàng (không đẩy về)
     addAnswerTime(t, question.difficulty)
@@ -464,6 +471,7 @@ export function createActions(ctx) {
     db.prepare('UPDATE teams SET pending_question = NULL, pending_order = NULL, pending_at = NULL, locked_until = ?, streak = 0 WHERE id = ?')
       .run(now() + lockMs, t.id)
     log(t.id, isSiege ? 'siege-fail' : 'wrong', question.province_id, timeout ? { timeout: true } : null, by)
+    if (isTram() && t.pending_bet) starLost(t, question.province_id, by)
     if (isSiege) endDuel(t, 'attacker-fail')
     const pushedBack = isSiege && !!t.previous_province
     if (pushedBack) {
@@ -554,7 +562,10 @@ export function createActions(ctx) {
           log(t.id, 'time-penalty', question.province_id, { penalty })
         }
         goldenBonus = Math.round(sum('golden') / need)
-        if (t.pending_bet) betBonus = Math.round(points * RULES.betBonusRatio) // "Liều" +50%: chọn một lần cho cả tỉnh
+        if (t.pending_bet) { // "Liều" +50%: chọn một lần cho cả tỉnh. Phòng tram: ngôi sao ×2 (cộng thêm = điểm tỉnh sau khi trừ tốc độ)
+          betBonus = isTram() ? points - penalty : Math.round(points * RULES.betBonusRatio)
+          if (isTram()) log(t.id, 'tram-star', question.province_id, { gain: betBonus }, by)
+        }
         speedBonus = Math.round(sum('speed') / need)
         const extra = goldenBonus + betBonus + speedBonus
         if (extra) db.prepare('UPDATE teams SET bonus_points = bonus_points + ? WHERE id = ?').run(extra, t.id)
@@ -624,6 +635,7 @@ export function createActions(ctx) {
     if (!t.pending_question) throw new GameError('no-pending', 'Không có câu hỏi nào đang chờ', 409)
     const question = q.question.get(t.pending_question)
     if (timedOut(question.difficulty, t.pending_at, t.pending_extra_ms)) return transaction(db, () => failQuestion(t, question, true, by))
+    if (isTram() && t.pending_bet) return transaction(db, () => failQuestion(t, question, false, by)) // câu có sao: bỏ qua = sai
     const lockMs = skipLockMs(question.difficulty, now() - t.pending_at)
     return transaction(db, () => {
       addAnswerTime(t, question.difficulty) // bỏ qua vẫn tính thời gian đã xem — không thành cách "tiết kiệm giờ"

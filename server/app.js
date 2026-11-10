@@ -421,6 +421,7 @@ export function createApp({ db, config, now = Date.now, random = Math.random }) 
       run: ({ session, body }) => roomOf(session).voteShared(session.player_id, body.answer),
     },
     'POST /api/skip': { auth: ['player'], change: true, run: ({ session }) => roomOf(session).skip(session.team_id, session.player_name) },
+    'POST /api/tram/star': { auth: ['player'], change: true, run: ({ session, body }) => roomOf(session).armStar(session.team_id, !!body.on, session.player_name) },
     'POST /api/retreat': { auth: ['player'], change: true, run: ({ session }) => roomOf(session).retreat(session.team_id, session.player_name) },
     'POST /api/answer': {
       auth: ['player'], change: true,

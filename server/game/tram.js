@@ -1,7 +1,7 @@
 // Chế độ "Chạy trạm": trạng thái hành trình của từng team (teams.tram, JSON chỉ server đọc),
 // bắt đầu trận (thời kỳ, rải key, mảnh ghép). Các luật gợi ý / cứu / câu hỏi / ghép thêm ở các task sau.
 
-import { REGIONS, RULES } from './rules.js'
+import { REGIONS, RULES, GameError } from './rules.js'
 
 const TRIES = 200
 
@@ -31,7 +31,7 @@ export function placeKeys(start, n, eligible, { provinces, adjacency, random }) 
 }
 
 export function createTram(ctx) {
-  const { db, q, now, random, json, provinces, adjacency, roomId, log, tram: content } = ctx
+  const { db, q, now, random, json, provinces, adjacency, roomId, log, tram: content, requireRunning, requireTeam, isTram } = ctx
 
   const state = t => json(t.tram)
   const save = (teamId, st) => db.prepare('UPDATE teams SET tram = ? WHERE id = ?').run(JSON.stringify(st), teamId)
@@ -158,5 +158,27 @@ export function createTram(ctx) {
     }
   }
 
-  return { setupTeams, state, save, shift, onCorrect, tick, placeKeys: (start, n, eligible) => placeKeys(start, n, eligible, { provinces, adjacency, random }) }
+  // Ngôi sao hy vọng: bật / tắt trước khi nhận câu (mỗi trận một lần). Sao chỉ 'used' khi câu được phát (consumeStar)
+  function armStar(teamId, on, by = null) {
+    requireRunning()
+    const t = requireTeam(teamId)
+    const st = isTram() ? state(t) : null
+    if (!st) throw new GameError('not-tram', 'Chỉ có trong phòng Chạy trạm', 409)
+    if (st.star === 'used') throw new GameError('star-used', 'Ngôi sao đã dùng rồi', 409)
+    st.star = on ? 'armed' : 'ready'
+    save(teamId, st)
+    log(teamId, 'tram-star', null, { on: !!on }, by)
+    return { star: st.star }
+  }
+
+  // Câu vừa phát: sao đang bật thì chuyển 'used' và trả true (câu này mang sao)
+  function consumeStar(teamId) {
+    const st = json(db.prepare('SELECT tram FROM teams WHERE id = ?').get(teamId).tram)
+    if (st?.star !== 'armed') return false
+    st.star = 'used'
+    save(teamId, st)
+    return true
+  }
+
+  return { setupTeams, state, save, shift, onCorrect, tick, armStar, consumeStar, placeKeys: (start, n, eligible) => placeKeys(start, n, eligible, { provinces, adjacency, random }) }
 }
