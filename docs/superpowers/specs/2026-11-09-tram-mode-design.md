@@ -48,7 +48,8 @@ Lý do: luật hiện tại nhiều (thử tài, cược, thẻ, sự kiện…)
 - Trả lời đúng ở tỉnh từng sai → nhận điểm bình thường (tỉnh không còn là "đã ghé mà không có điểm") [Claude].
 
 ### 3.4. Ngôi sao hy vọng
-- Mỗi team **1 lần cả trận** [CĐA]. Bật **trước khi xem câu hỏi** (cùng chỗ khung chọn cược hiện nay) [Claude].
+- Mỗi team **1 lần cả trận** [CĐA]. Bật **trước khi xem câu hỏi** [Claude]: nút "Ngôi sao hy vọng" ở thanh bên dạng **nạp sẵn** (bật/tắt được, áp cho câu kế tiếp được phát; có bước xác nhận trong giao diện, không `confirm()`; đồng đội thấy trạng thái). Không thêm bước chọn ở mỗi tỉnh.
+- **Bỏ qua** khi câu đang có ngôi sao = tính như **sai** (bị trừ, ngôi sao đã dùng) — tránh lách luật bật sao rồi bỏ qua câu khó [Claude].
 - Dùng được ở trạm tỉnh **và** ở câu hỏi map đặc biệt [Claude] (không dùng cho câu ghép mảnh).
 - Đúng → điểm câu đó **×2** (sau khi trừ theo tốc độ) [CĐA ×2; Claude: nhân sau khi trừ].
 - Sai / hết giờ → **bị trừ** điểm gốc của câu đó (tỉnh: điểm tỉnh; map đặc biệt: điểm câu) [CĐA]. Vẫn khóa 30 giây.
@@ -56,27 +57,34 @@ Lý do: luật hiện tại nhiều (thử tài, cược, thẻ, sự kiện…)
 ### 3.5. Key và gợi ý
 - Đầu trận, server rải **N key** (mặc định 5) cho **từng team riêng**, vị trí random mỗi trận [CĐA]. Ràng buộc [Claude]: không ở tỉnh xuất phát và các tỉnh kề nó; mỗi miền ít nhất 1 key; hai key không kề nhau.
 - Team **không thấy** vị trí key trên bản đồ (server không gửi) cho tới khi nhặt được.
-- Cứ đạt mốc **3, 6, 9… tỉnh trả lời đúng** → nhận **1 câu đố gợi ý** về một tỉnh đang giữ key [CĐA]. Gợi ý trỏ tới **key chưa có gợi ý**, chọn ngẫu nhiên [Claude]. Khi mọi key còn lại đã có gợi ý → mốc tiếp theo cho **gợi ý thứ hai** (câu đố khác, dễ hơn) cho key chưa nhặt có gợi ý sớm nhất [Claude].
+- Cứ đạt mốc **3, 6, 9… tỉnh trả lời đúng** → nhận **1 câu đố gợi ý** về một tỉnh đang giữ key [CĐA]. Gợi ý trỏ tới **key chưa có gợi ý gần vị trí hiện tại nhất** (số bước trên đồ thị giáp ranh; bằng nhau thì ngẫu nhiên) [Claude, sửa sau review: đúng tinh thần "đi thẳng"]. Khi mọi key còn lại đã có gợi ý → mốc tiếp theo cho **gợi ý thứ hai** (câu đố khác, dễ hơn) cho key chưa nhặt có gợi ý sớm nhất [Claude].
 - Gợi ý là **câu đố văn hóa** nêu 2–3 đặc điểm của tỉnh (món ăn, lễ hội, danh thắng, làng nghề…), **không quá dễ, không quá khó**, không nêu tên tỉnh mới / tỉnh cũ [CĐA]. Tránh đặc điểm ai cũng biết (thủ đô, "thành phố lớn nhất").
 - Các gợi ý đã nhận hiện trong một **sổ gợi ý** trên màn team (mọi thành viên thấy) [Claude].
 - **Nhặt key**: tới tỉnh giữ key và **trả lời đúng** câu của tỉnh đó [CĐA]. Tình cờ ghé đúng tỉnh có key (chưa có gợi ý) và trả lời đúng → cũng nhặt được [Claude]. Sai → khóa, "Trả lời lại" để thử tiếp.
-- Mỗi key nhặt được lộ ra **1 mảnh ghép** của câu đố cuối (xem 3.6) [CĐA chọn ý "mảnh ghép"].
+- Mỗi key nhặt được lộ ra **1 mảnh ghép** của câu đố cuối (xem 3.6) [CĐA chọn ý "mảnh ghép"]. Server gán key → mảnh **ngẫu nhiên** lúc rải key; client chỉ nhận chữ của mảnh, không kèm vị trí (thứ tự nhặt không được trùng lời giải) [Claude].
+- **Rải key** [Claude]: chỉ ở tỉnh có ≥ 1 câu đố gợi ý đã duyệt. Không thỏa ràng buộc thì nới theo thứ tự: bỏ "hai key không kề" → bỏ "mỗi miền ≥ 1". Số tỉnh có gợi ý đã duyệt < N + 3 → **không cho tạo phòng Chạy trạm** với N đó, báo rõ cho chủ phòng.
 
 ### 3.6. Map đặc biệt
 - Mỗi team được gán **1 thời kỳ lịch sử random** lúc bắt đầu trận, giữ kín (server không gửi tên) cho tới khi mở map [Claude]. Hai team có thể trùng thời kỳ [Claude].
 - Gom đủ key → mở **map đặc biệt riêng** của team: khung cảnh thời kỳ đó [CĐA].
-- **Ngay lúc mở map**: cộng **điểm tỉnh của mọi tỉnh chưa đặt chân tới** [CĐA]. Tỉnh **đã ghé mà không có điểm** (sai, hết giờ, bỏ qua, bỏ đi) → **mất** điểm tỉnh đó [CĐA]. Không đi lại trên bản đồ sau khi mở map [Claude].
+- **Ngay lúc mở map**: cộng **điểm tỉnh của mọi tỉnh chưa đặt chân tới** [CĐA]. Tỉnh **đã ghé mà không có điểm** (sai, hết giờ, bỏ qua, bỏ đi) → **mất** điểm tỉnh đó [CĐA] — nghĩa là **không được cộng (0), không bị trừ âm** [Claude hiểu theo CĐA]. "Đã ghé" = tỉnh team từng đặt chân tới (đã được phát câu / khung chọn), không tính tỉnh chỉ nhìn thấy qua sương mù. Không đi lại trên bản đồ sau khi mở map [Claude].
 - Trả lời **3 câu** về thời kỳ đó [CĐA], lần lượt. Điểm mỗi câu **500** (tỉnh cao nhất 300) [Claude: "lớn hơn nhiều" theo CĐA]. Giờ trả lời và trừ theo tốc độ như câu thử tài hiện có: 45 giây, 20 giây đầu đủ điểm [Claude]. Sai / hết giờ → khóa 30 giây rồi câu khác cùng thời kỳ; không trừ điểm (trừ khi dùng ngôi sao) [Claude].
 - Đúng đủ 3 câu → **câu đố ghép mảnh**: các mảnh từ key (N mảnh) hiện xáo trộn, team sắp lại đúng thứ tự để ra một câu / cụm từ về thời kỳ đó [CĐA ý 1]. Đúng → **+1000** [Claude] và **thưởng về đích sớm = số phút còn lại × 30** (làm tròn xuống theo phút, tính lúc giải xong câu ghép) [CĐA đồng ý công thức], team **về đích**. Sai → khóa 30 giây, sắp lại; không giới hạn lần [Claude]. Không tính giờ / không trừ theo tốc độ cho câu ghép [Claude].
 - Mảnh ghép lộ dần từ đầu (theo từng key) nên team có thể đoán thời kỳ trước khi vào map — chấp nhận, coi là phần vui [Claude].
 - Về đích → chờ hết trận; bảng điểm hiện trạng thái "Đã về đích" [Claude].
+- Ở map đặc biệt, "Bỏ qua" = tính như sai (khóa 30 giây, câu khác), không có lùi về [Claude].
+- Câu ghép nhiều người một team: mỗi người sắp trên máy mình, ai bấm "Chốt" thì nộp thứ tự của người đó (giống câu tự điền), không dùng trạng thái kéo-thả chung. Giao diện **bấm lần lượt** từng mảnh (không kéo-thả) cho chắc trên điện thoại [Claude].
+- Câu ghép lưu sẵn **cách chia cho từng N (3–7)** trong dữ liệu; không tự gộp mảnh lúc chạy [Claude].
+- Khoảnh khắc nhặt key cuối: client diễn xong hiệu ứng kết quả ("Chính xác" + key + mảnh) rồi mới chuyển sang màn map đặc biệt (tránh lỗi cũ SSE đóng khung sớm) [Claude].
 
 ### 3.7. Kết thúc và xếp hạng
 - Trận kết thúc khi **hết giờ** hoặc **mọi team đã về đích** [Claude], hoặc chủ phòng bấm Kết thúc.
 - Điểm = điểm các tỉnh đã trả lời đúng (sau trừ tốc độ) ± ngôi sao + (nếu đã mở map) điểm tỉnh chưa đi + điểm câu map đặc biệt + (nếu về đích) 1000 + thưởng về đích sớm [CĐA + Claude].
 - Lý do có thưởng về đích sớm: tỉnh chưa đi được cộng đủ điểm khi mở map, nên nếu không có khoản này thì hai team không sai câu nào sẽ gần như bằng điểm dù về đích cách nhau 20 phút.
 - Team chưa mở map lúc hết giờ: chỉ có điểm tỉnh đã trả lời đúng (± ngôi sao) [Claude].
-- Xếp hạng theo tổng điểm; bằng điểm → về đích trước xếp trên; chưa về đích → tổng thời gian trả lời ít hơn (luật hiện có) [Claude].
+- Xếp hạng theo tổng điểm; bằng điểm → về đích trước xếp trên (cột thời điểm về đích; chưa về đích xếp sau); còn bằng → tổng thời gian trả lời ít hơn, tính cả câu map đặc biệt (luật hiện có) [Claude].
+- Thời lượng phòng Chạy trạm tối thiểu **30 phút** [Claude].
+- Lúc tạo phòng Chạy trạm ẩn các tùy chọn không áp dụng (số câu/tỉnh, cược, chủ đề, Theo team/Chơi đơn). Sảnh chờ "Bạn có biết?" giữ nguyên. "Chơi lại" xóa sạch key, gợi ý, thời kỳ, mảnh, trạng thái map. Sửa điểm của chủ phòng đi vào điểm thưởng như hiện tại [Claude].
 
 ### 3.8. Màn chiếu và chủ phòng
 - Màn chiếu: đồng hồ, bảng điểm, mỗi team hiện **số key / N** và "Đã về đích"; đóng băng bảng điểm 10 phút cuối như hiện tại [Claude]. Không bản tin công thành / đổi chủ (không còn). Cuối trận: bảng xếp hạng (bỏ tua lại hành trình nếu tốn công — để builder quyết).
@@ -94,13 +102,17 @@ Không lấy giai đoạn từ 1858 trở đi (tránh nội dung chính trị hi
 Mỗi thời kỳ:
 - **12 câu** trắc nghiệm 4 phương án (đủ cho 3 câu + trả lời lại + nhiều team trùng thời kỳ), trộn mức 2–3, định dạng giống `questions.json` + trường `period`.
 - **1 câu ghép mảnh**: một câu / cụm từ có ý nghĩa của thời kỳ, chia được thành **3–7 mảnh** (để khớp số key chủ phòng chọn; mặc định 5) — ví dụ chia theo từ. Có lời giải + nguồn.
-- **Khung cảnh map**: mô tả ngắn + 3 địa danh / hình ảnh tiêu biểu để vẽ (minh họa SVG phong cách sticker hiện có).
+- **Khung cảnh map**: mô tả ngắn + 3 hình ảnh tiêu biểu. Dùng **một khung cảnh chung** (nền + tên thời kỳ + 3 icon sticker trong `shared/icons.js`, đổi màu theo thời kỳ), không vẽ 7 tranh riêng [Claude, sau review: tiết kiệm thời gian].
+- **Tiêu chí loại trừ** khi soạn: không hỏi trận đánh, vũ khí, người chết, tranh cãi lịch sử; ưu tiên công trình, chữ viết, giáo dục, nghệ thuật, phong tục, nhân vật văn hóa.
 
 Tổng: 84 câu + 7 câu ghép.
+
+**Thứ tự ưu tiên (MVP cho 24/11)** [Claude]: (1) **68 câu đố gợi ý** là đường găng — không có gợi ý đã duyệt thì không rải được key; (2) **2–3 thời kỳ** đã duyệt là đủ chơi (team trùng thời kỳ chấp nhận được), các thời kỳ còn lại làm tiếp; (3) phần còn lại sau. Mốc: server + test ~14/11, giao diện ~18/11, chạy thử tay 19/11; không đạt thì tổng duyệt 21/11 dùng hai kiểu phòng cũ.
 
 ### 4.2. Câu đố gợi ý key [CĐA: câu đố văn hóa, độ khó vừa]
 - **34 tỉnh × 2 câu đố** (câu 1 vừa, câu 2 dễ hơn — dùng cho "gợi ý thứ hai") = 68 câu đố.
 - Ưu tiên dựng từ **sự thật đã có nguồn** trong `questions.json` của chính tỉnh đó (dùng lại `sources` đã kiểm chứng) → ít tốn lượt tìm kiếm. Không trích nguyên văn câu hỏi trạm (tránh team vừa nhận gợi ý vừa gặp đúng câu đó).
+- Mỗi câu đố phải **chỉ khớp đúng 1 tỉnh** (bước kiểm "có tỉnh nào khác cũng đúng không" khi kiểm chứng và khi duyệt) — ví dụ "chợ nổi" khớp nhiều tỉnh Nam Bộ là không đạt.
 - Không nêu tên tỉnh mới, tỉnh cũ, trung tâm hành chính. **Được** nhắc đặc sản / lễ hội / danh thắng của tỉnh cũ đã sáp nhập [Claude]; bù lại, sổ gợi ý và tooltip bản đồ của mode này hiện **các tỉnh cũ đã gộp** vào mỗi tỉnh mới (`mergedFrom`) để người chơi lần ra được [Claude].
 
 ### 4.3. Chủ dự án tự duyệt [CĐA]
@@ -112,6 +124,8 @@ Tổng: 84 câu + 7 câu ghép.
 - `data/periods.json`: danh sách thời kỳ { id, name, years, scene, questions[], puzzle { text, pieces[], explanation, sources } }.
 - `data/key-hints.json`: { provinceId: [hint1, hint2] }, mỗi hint có `text`, `sources`.
 - `scripts/validate-data.mjs` kiểm tra thêm hai file này (có nguồn, đủ số lượng, không chứa tên tỉnh).
+- Hai file này **không** đặt trong `public/` (người chơi tra ngược được gợi ý → tỉnh); client chỉ nhận phần đã lộ qua view [Claude].
+- Mode này hiện tỉnh cũ đã gộp trên bản đồ → **không phát** các câu hỏi "vốn là đặc sản của tỉnh cũ nào" (hiện có 6 câu: `hai-phong-03`, `ninh-binh-04`, `dak-lak-02`, `dong-thap-04`, `can-tho-02`, `can-tho-03`) — đánh cờ trong dữ liệu và lọc khi phát câu ở mode này [Claude].
 
 ## 5. Ràng buộc kỹ thuật
 
@@ -127,3 +141,4 @@ Tổng: 84 câu + 7 câu ghép.
 - Bố cục UI sổ gợi ý, khay key/mảnh ghép, màn map đặc biệt và câu ghép (kéo-thả hay bấm lần lượt), miễn đồng nhất phong cách hiện có và chạy được trên điện thoại.
 - Có giữ màn "tua lại hành trình" cuối trận cho mode này không.
 - Thứ tự làm: luật server + test trước, UI sau, nội dung song song.
+- Gợi ý từ review: mode này giống **phòng chơi đơn** hơn phòng team (không có chủ tỉnh, "đi qua tỉnh đã có điểm", sương mù theo tỉnh đã ghé) — cân nhắc mở rộng nhánh `isSolo()` cho phần di chuyển / tem thay vì tách từ nhánh team.
