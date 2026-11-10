@@ -6,7 +6,7 @@ import { RULES, REGIONS, byRank, GameError, cleanName, normalizeText } from './r
 export function createOwner(ctx) {
   const {
     db, q, now, random, provinces, adjacency, freezeBeforeEndMin, roomId,
-    log, state, requireRunning, requireTeam, scores, isSolo, recordBoard,
+    log, state, requireRunning, requireTeam, scores, isSolo, usesStamps, recordBoard,
   } = ctx
 
   // ---------- Chủ phòng ----------
@@ -100,7 +100,7 @@ export function createOwner(ctx) {
   // Tỉnh xuất phát: phòng team → của team (ownership); phòng đơn → tem đầu tiên (không tính Tiên phong). Gọi trong transaction
   function placeStart(teamId, provinceId, at) {
     db.prepare('UPDATE teams SET current_province = ?, previous_province = NULL WHERE id = ?').run(provinceId, teamId)
-    if (isSolo()) q.addStamp.run(roomId, teamId, provinceId, 0, null, at)
+    if (usesStamps()) q.addStamp.run(roomId, teamId, provinceId, 0, null, at)
     else db.prepare('INSERT INTO ownership (room_id, province_id, team_id, captured_at) VALUES (?, ?, ?, ?)').run(roomId, provinceId, teamId, at)
     q.addVisit.run(teamId, provinceId)
     log(teamId, 'spawn', provinceId)

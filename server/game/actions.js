@@ -7,7 +7,7 @@ import { RULES, REGIONS, CARD_KINDS, SOLO_CARD_KINDS, HELP_CARDS, GameError } fr
 export function createActions(ctx) {
   const {
     db, q, now, random, json, provinces, adjacency, topicNames, timedOut, roomId,
-    log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo,
+    log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps,
     issueQuestion, isCorrect, correctAnswerText, addAnswerTime, saveResult, shuffled,
   } = ctx
 
@@ -61,7 +61,7 @@ export function createActions(ctx) {
   // tỉnh trống → chọn chủ đề / đặt cược (nếu phòng bật) rồi mới phát câu. Gọi trong transaction.
   function offerQuestion(t, provinceId) {
     // Phòng đơn: tỉnh đã có tem của mình → đi qua, không hỏi lại; chưa có → câu hỏi (không có chủ tỉnh / thử tài)
-    if (isSolo() && q.stamp.get(t.id, provinceId)) return { status: 'own' }
+    if (usesStamps() && q.stamp.get(t.id, provinceId)) return { status: 'own' }
     const owner = q.owner.get(roomId, provinceId)
     if (owner?.team_id === t.id) return { status: 'own' }
     if (owner) return { status: shieldActive(owner) ? 'shielded' : 'owned', ...siegeBlock(owner) }
@@ -83,7 +83,7 @@ export function createActions(ctx) {
     if (!t.current_province) throw new GameError('no-province', 'Team chưa có vị trí trên bản đồ', 409)
     const owner = q.owner.get(roomId, t.current_province)
     if (owner?.team_id === t.id) throw new GameError('own-province', 'Tỉnh này đã là của đội bạn', 409)
-    if (isSolo() && q.stamp.get(t.id, t.current_province)) throw new GameError('own-province', 'Bạn đã có tem tỉnh này', 409)
+    if (usesStamps() && q.stamp.get(t.id, t.current_province)) throw new GameError('own-province', 'Bạn đã có tem tỉnh này', 409)
     return transaction(db, () => {
       log(t.id, 'retry', t.current_province, null, by)
       return offerQuestion(t, t.current_province)
@@ -342,7 +342,7 @@ export function createActions(ctx) {
 
   // Chiếm tỉnh hiện tại (gọi trong transaction). Phòng đơn: nhận tem (questionId: câu vừa đúng — sổ tay lấy lời giải)
   function capture(t, provinceId, isSiege, by, questionId = null) {
-    if (isSolo()) return stampProvince(t, provinceId, by, questionId)
+    if (usesStamps()) return stampProvince(t, provinceId, by, questionId)
     const owner = q.owner.get(roomId, provinceId)
     if (!isSiege && owner) return { captured: false, reason: 'taken' }           // team khác vừa chiếm trước
     if (isSiege && (!owner || owner.team_id === t.id)) return { captured: false, reason: 'changed' }
@@ -374,7 +374,7 @@ export function createActions(ctx) {
   function stampProvince(t, provinceId, by, questionId) {
     const p = provinces.get(provinceId)
     // (tem tỉnh xuất phát không có câu hỏi → không tính là đã có người tới trước)
-    const first = !!q.room.get(roomId).pioneer
+    const first = !isTram() && !!q.room.get(roomId).pioneer // tram: không có Tiên phong
       && !db.prepare('SELECT 1 FROM stamps WHERE room_id = ? AND province_id = ? AND question_id IS NOT NULL').get(roomId, provinceId)
     q.addStamp.run(roomId, t.id, provinceId, first ? 1 : 0, questionId, now())
     let bonus = 0
@@ -383,7 +383,7 @@ export function createActions(ctx) {
     if (first) bonus += RULES.pioneerBonus
     if (bonus) db.prepare('UPDATE teams SET bonus_points = bonus_points + ? WHERE id = ?').run(bonus, t.id)
     let card = null
-    if (p.is_city && q.cards.all(t.id).length < RULES.maxCards) {
+    if (!isTram() && p.is_city && q.cards.all(t.id).length < RULES.maxCards) { // tram: không rơi thẻ
       card = SOLO_CARD_KINDS[Math.floor(random() * SOLO_CARD_KINDS.length)]
       db.prepare('INSERT INTO cards (team_id, kind) VALUES (?, ?)').run(t.id, card)
     }
@@ -395,6 +395,7 @@ export function createActions(ctx) {
   // Về quê: tỉnh vừa chiếm là quê của thành viên team → +50, mỗi tỉnh 1 lần, tối đa RULES.homeMax tỉnh.
   // Ghi vào nhật ký team (action 'home'); bản tin màn chiếu không lấy action này. Trả về { names, bonus, n } hoặc null
   function homeBonus(t, provinceId, by) {
+    if (isTram()) return null // tram: không có thưởng về quê
     const names = db.prepare('SELECT name FROM players WHERE team_id = ? AND home = ? ORDER BY id').all(t.id, provinceId).map(r => r.name)
     if (!names.length) return null
     const done = db.prepare("SELECT province_id FROM events_log WHERE team_id = ? AND action = 'home'").all(t.id).map(r => r.province_id)
@@ -417,7 +418,7 @@ export function createActions(ctx) {
   function bumpStreak(t, provinceId, by) {
     const n = t.streak + 1
     db.prepare('UPDATE teams SET streak = ? WHERE id = ?').run(n, t.id)
-    if (n % RULES.streakEvery) return { n, card: null, bonus: 0 }
+    if (isTram() || n % RULES.streakEvery) return { n, card: null, bonus: 0 }
     let card = null, bonus = 0
     if (q.cards.all(t.id).length < RULES.maxCards) {
       card = HELP_CARDS[Math.floor(random() * HELP_CARDS.length)]
@@ -433,7 +434,7 @@ export function createActions(ctx) {
   // Trả lời sai hoặc hết giờ: khóa (câu vàng: khóa ×2); công thành thì bị đẩy về tỉnh trước; mất chuỗi đúng. Gọi trong transaction.
   // Không lộ đáp án đúng (team khác có thể gặp lại câu này).
   function failQuestion(t, question, timeout, by) {
-    const isSiege = question.difficulty === 'siege' && !isSolo() // phòng đơn: câu thử tài chỉ là câu vàng (không đẩy về)
+    const isSiege = question.difficulty === 'siege' && !usesStamps() // phòng đơn/tram: câu thử tài chỉ là câu vàng (không đẩy về)
     addAnswerTime(t, question.difficulty)
     db.prepare(`INSERT INTO answered (team_id, question_id, correct, answered_at) VALUES (?, ?, 0, ?)
                 ON CONFLICT(team_id, question_id) DO UPDATE SET correct = 0, answered_at = excluded.answered_at`)
@@ -451,7 +452,7 @@ export function createActions(ctx) {
     }
     // Câu vàng: khóa ×2; "Liều": khóa thêm 30 giây
     const lockMs = (isSiege ? RULES.lockSiegeWrongMs : RULES.lockWrongMs) * (t.pending_golden ? RULES.goldenLockFactor : 1)
-      + (t.pending_bet ? RULES.betExtraLockMs : 0)
+      + (t.pending_bet && !isTram() ? RULES.betExtraLockMs : 0)
     db.prepare('UPDATE teams SET pending_question = NULL, pending_order = NULL, pending_at = NULL, locked_until = ?, streak = 0 WHERE id = ?')
       .run(now() + lockMs, t.id)
     log(t.id, isSiege ? 'siege-fail' : 'wrong', question.province_id, timeout ? { timeout: true } : null, by)
@@ -484,7 +485,7 @@ export function createActions(ctx) {
                   ON CONFLICT(team_id, question_id) DO UPDATE SET correct = 1, answered_at = excluded.answered_at`)
         .run(t.id, questionId, now())
       db.prepare('UPDATE teams SET pending_question = NULL, pending_order = NULL, pending_at = NULL WHERE id = ?').run(t.id)
-      const isSiege = question.difficulty === 'siege' && !isSolo()
+      const isSiege = question.difficulty === 'siege' && !usesStamps()
       // Đấu nhiều hiệp: đúng trước chủ nhà → thắng hiệp; chưa thắng đủ đa số thì sang hiệp sau (chưa cướp tỉnh)
       const duel = isSiege ? q.duelOf.get(t.id) : null
       const round = duel?.rounds > 1 ? roundOver(duel, 'att') : null
@@ -505,14 +506,14 @@ export function createActions(ctx) {
       const part = {
         penalty: timePenalty(points, question.difficulty, elapsed, t.pending_extra_ms),
         golden: t.pending_golden ? points : 0,
-        speed: elapsed <= RULES.speedBonusMs ? Math.round(points * RULES.speedBonusRatio) : 0,
+        speed: !isTram() && elapsed <= RULES.speedBonusMs ? Math.round(points * RULES.speedBonusRatio) : 0,
       }
       const need = isSiege ? 1 : q.room.get(roomId).quiz_count
       const prog = isSiege ? null : progressOf(t)
       const done = (prog?.done ?? 0) + 1
       const sum = k => (prog?.[k] ?? 0) + part[k]
       // Chưa đủ số câu (và tỉnh vẫn còn trống): ghi tiến độ, chưa cắm cờ — team bấm "Câu tiếp theo" (= trả lời lại) để nhận câu sau
-      if (done < need && (isSolo() || !q.owner.get(roomId, question.province_id))) {
+      if (done < need && (usesStamps() || !q.owner.get(roomId, question.province_id))) {
         db.prepare('UPDATE teams SET progress = ? WHERE id = ?').run(JSON.stringify({
           province: question.province_id, done, penalty: sum('penalty'), golden: sum('golden'), speed: sum('speed'), bet: !!t.pending_bet,
         }), t.id)
@@ -635,7 +636,7 @@ export function createActions(ctx) {
         log(t.id, 'retreat', back, null, by)
       }
       const result = { skipped: true, correct: false, lockedUntil: now() + lockMs, province: back ?? t.current_province }
-      saveResult(t, { questionId: question.id, siege: question.difficulty === 'siege' && !isSolo(), ...result, province: question.province_id, backTo: result.province }, by)
+      saveResult(t, { questionId: question.id, siege: question.difficulty === 'siege' && !usesStamps(), ...result, province: question.province_id, backTo: result.province }, by)
       return result
     })
   }

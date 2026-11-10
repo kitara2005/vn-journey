@@ -6,13 +6,13 @@ export function createViews(ctx) {
   const {
     db, q, now, json, provinces, adjacency, collections, topicNames, roomId,
     state, activeEvent, requireTeam, shieldActive, pendingPublic, publicQuestion, choiceFor, siegeBlock, timedOut, lobby, sharedPublic, lobbyFacts,
-    correctAnswerText, isSolo,
+    correctAnswerText, isSolo, usesStamps,
   } = ctx
 
   // ---------- Điểm ----------
   // Phòng đơn: "tỉnh của mình" = tỉnh đã có tem (tính điểm tỉnh, bộ sưu tập, xuyên 3 miền như phòng team)
   function scores() {
-    const owners = isSolo() ? q.roomStamps.all(roomId) : q.owners.all(roomId)
+    const owners = usesStamps() ? q.roomStamps.all(roomId) : q.owners.all(roomId)
     return q.teams.all(roomId).map(t => {
       const owned = owners.filter(o => o.team_id === t.id).map(o => o.province_id)
       const base = owned.reduce((s, id) => s + provinces.get(id).points, 0)
@@ -60,7 +60,7 @@ export function createViews(ctx) {
       const o = owners.get(id)
       known[id] = !o ? 'free' : o.team_id === t.id ? 'mine' : 'taken'
     }
-    const solo = isSolo()
+    const solo = usesStamps() // nghĩa "tính theo tem" (known/mine/canRetry); soloExtras chỉ cho phòng đơn thật
     const stamps = solo ? q.stamps.all(t.id) : []
     const mine = solo
       ? stamps.map(st => ({ province: st.province_id, shieldUntil: null }))
@@ -149,7 +149,7 @@ export function createViews(ctx) {
       mine,
       known,
       // Phòng đơn: tem (Tiên phong), số người có tem ở các tỉnh mình đã ghé (không lộ là ai), hạng của mình
-      ...(solo ? soloExtras(t, visited, stamps) : {}),
+      ...(isSolo() ? soloExtras(t, visited, stamps) : {}),
       trail,
       log,
       lastResult: json(t.last_result),
