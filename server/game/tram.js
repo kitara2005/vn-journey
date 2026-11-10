@@ -1,7 +1,6 @@
 // Chế độ "Chạy trạm": trạng thái hành trình của từng team (teams.tram, JSON chỉ server đọc),
 // bắt đầu trận (thời kỳ, rải key, mảnh ghép). Các luật gợi ý / cứu / câu hỏi / ghép thêm ở các task sau.
 
-import { createHash } from 'node:crypto'
 import { transaction } from '../db.js'
 import { REGIONS, RULES, GameError, timePenaltyOf } from './rules.js'
 
@@ -32,27 +31,12 @@ export function placeKeys(start, n, eligible, { provinces, adjacency, random }) 
   return pick()
 }
 
-// Thứ tự mảnh ghép hiện cho team: hoán vị cố định của 0..n-1 theo hash(teamId + periodId), luôn khác thứ tự đúng (n > 1)
-export function puzzleDisplay(teamId, periodId, n) {
-  const h = createHash('sha256').update(`${teamId}:${periodId}`).digest()
-  let seed = h.readUInt32BE(0)
-  const rnd = () => {
-    seed = (seed + 0x6D2B79F5) | 0
-    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
-  }
-  const a = Array.from({ length: n }, (_, i) => i)
-  for (let i = n - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  if (n > 1 && a.every((v, i) => v === i)) a.push(a.shift()) // trùng thứ tự đúng: xoay một nấc
-  return a
-}
+// Thứ tự mảnh ghép hiện cho team: lưu server-side lúc vào câu ghép (st.puzzle.display), client không tự suy ra được.
+// View (Task 8) gửi các mảnh theo thứ tự này
+export const puzzleDisplay = st => st.puzzle.display
 
 export function createTram(ctx) {
-  const { db, q, now, random, json, provinces, adjacency, roomId, log, tram: content, requireRunning, requireTeam, isTram, recordBoard, scoreOf } = ctx
+  const { db, q, now, random, json, provinces, adjacency, roomId, log, tram: content, requireRunning, requireTeam, isTram, closeRoom, scoreOf } = ctx
 
   const state = t => json(t.tram)
   const save = (teamId, st) => db.prepare('UPDATE teams SET tram = ? WHERE id = ?').run(JSON.stringify(st), teamId)
@@ -207,6 +191,17 @@ export function createTram(ctx) {
     return true
   }
 
+  // Hoán vị ngẫu nhiên của 0..n-1, luôn khác thứ tự đúng khi n > 1 (trùng thì xoay một nấc)
+  function randomDisplay(n) {
+    const a = Array.from({ length: n }, (_, i) => i)
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1))
+      ;[a[i], a[j]] = [a[j], a[i]]
+    }
+    if (n > 1 && a.every((v, i) => v === i)) a.push(a.shift())
+    return a
+  }
+
   // ---------- Map đặc biệt: 3 câu thời kỳ, rồi câu ghép mảnh ----------
   const lockLeft = until => { if (until && until > now()) throw new GameError('locked', 'Team đang nghỉ chân, chờ hết thời gian', 423) }
 
@@ -280,7 +275,10 @@ export function createTram(ctx) {
         .run(points, Math.min(elapsed, RULES.answerLimitMs.siege), teamId)
       st.special.pending = null
       st.special.done += 1
-      if (st.special.done >= RULES.tram.specialCount) st.stage = 'puzzle'
+      if (st.special.done >= RULES.tram.specialCount) {
+        st.stage = 'puzzle'
+        st.puzzle.display = randomDisplay(st.need)
+      }
       save(teamId, st)
       log(teamId, 'tram-special', null, { id: p.id, correct: true, points, star: p.star }, by)
       return { correct: true, points, correctAnswer: qn.options[qn.answer], explanation: qn.explanation, stage: st.stage }
@@ -295,7 +293,7 @@ export function createTram(ctx) {
     })
   }
 
-  // order = vị trí trong danh sách mảnh hiện cho client (puzzleDisplay), theo thứ tự team xếp. Đúng khi ánh xạ ra 0..n-1
+  // order = vị trí trong danh sách mảnh hiện cho client (st.puzzle.display), theo thứ tự team xếp. Đúng khi ánh xạ ra 0..n-1
   function submitPuzzle(teamId, order, by = null) {
     return transaction(db, () => {
       const { st } = need(teamId, 'puzzle')
@@ -304,7 +302,7 @@ export function createTram(ctx) {
       if (!Array.isArray(order) || order.length !== n || new Set(order).size !== n || !order.every(v => Number.isInteger(v) && v >= 0 && v < n)) {
         throw new GameError('bad-order', 'Thứ tự mảnh ghép không hợp lệ')
       }
-      const shown = puzzleDisplay(teamId, st.period, n)
+      const shown = st.puzzle.display ??= randomDisplay(n)
       if (!order.every((pos, i) => shown[pos] === i)) {
         st.puzzle.lockedUntil = now() + RULES.tram.lockMs
         st.puzzle.tries += 1
@@ -322,9 +320,7 @@ export function createTram(ctx) {
       log(teamId, 'tram-finish', null, { finishBonus, tries: st.puzzle.tries }, by)
       const open = db.prepare('SELECT tram FROM teams WHERE room_id = ?').all(roomId).some(r => json(r.tram)?.stage !== 'done')
       if (!open) { // cả phòng về đích: kết thúc như end()
-        db.prepare("UPDATE rooms SET status = 'ended', ends_at = ?, shared_question = NULL WHERE id = ?").run(now(), roomId)
-        log(null, 'end')
-        recordBoard()
+        closeRoom()
       }
       return { correct: true, finishBonus, total: scoreOf(teamId)?.total }
     })

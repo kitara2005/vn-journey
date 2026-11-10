@@ -78,7 +78,7 @@ export function createRoomScope(ctx, roomId) {
     }
   }
 
-  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps, recordBoard, scoreOf: id => scores().find(s => s.teamId === id) }
+  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps, recordBoard, closeRoom: () => owner.closeRoom(), scoreOf: id => scores().find(s => s.teamId === id) }
   const tram = createTram(rctx)
   const questions = createQuestions({ ...rctx, tram })
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions, tram })

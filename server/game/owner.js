@@ -151,11 +151,14 @@ export function createOwner(ctx) {
   function end() {
     const s = state()
     if (!['running', 'paused'].includes(s.status)) throw new GameError('not-running', 'Trận không đang diễn ra', 409)
-    transaction(db, () => {
-      db.prepare("UPDATE rooms SET status = 'ended', ends_at = ?, shared_question = NULL WHERE id = ?").run(now(), roomId)
-      log(null, 'end')
-      recordBoard()
-    })
+    transaction(db, closeRoom)
+  }
+
+  // Kết thúc phòng (gọi trong transaction): chủ phòng bấm kết thúc, hoặc mọi team Chạy trạm đã về đích
+  function closeRoom() {
+    db.prepare("UPDATE rooms SET status = 'ended', ends_at = ?, shared_question = NULL WHERE id = ?").run(now(), roomId)
+    log(null, 'end')
+    recordBoard()
   }
 
   // Chơi lại: xóa toàn bộ diễn biến trận, giữ team và người chơi
@@ -229,5 +232,5 @@ export function createOwner(ctx) {
     })
   }
 
-  return { spawnSolo, kickPlayer, renamePlayer, leave, releaseHost, assignStarts, start, pause, resume, end, reset, setTopicChoice, setBetChoice, triggerEvent, adjustScore }
+  return { spawnSolo, kickPlayer, renamePlayer, leave, releaseHost, assignStarts, start, pause, resume, end, closeRoom, reset, setTopicChoice, setBetChoice, triggerEvent, adjustScore }
 }

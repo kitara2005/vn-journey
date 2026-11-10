@@ -441,14 +441,21 @@ test('timePenaltyOf: hàm thuần, khớp luật siege 20-45 giây', () => {
   assert.equal(timePenaltyOf(500, 'siege', 35_000, 15_000), 0)
 })
 
-test('puzzleDisplay: hoán vị cố định, không bao giờ là thứ tự đúng', () => {
-  for (let n = 2; n <= 7; n++) {
-    for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
-      const d = puzzleDisplay(id, 'van-lang', n)
-      assert.deepEqual([...d].sort((x, y) => x - y), [...Array(n).keys()])
-      assert.ok(d.some((v, i) => v !== i))
-      assert.deepEqual(d, puzzleDisplay(id, 'van-lang', n))
+test('puzzleDisplay: sinh một lần khi vào câu ghép, ổn định, hoán vị, không phải thứ tự đúng', () => {
+  for (let k = 0; k < 8; k++) {
+    const g = specialAt()
+    const t = g.teams[0].id
+    assert.equal(getTram(g.db, t).puzzle.display, undefined)
+    for (let i = 0; i < 3; i++) {
+      const pub = g.game.specialNext(t)
+      g.game.specialAnswer(t, pub.id, g.right(t, pub))
     }
+    const st = getTram(g.db, t)
+    const d = puzzleDisplay(st)
+    assert.deepEqual([...d].sort((x, y) => x - y), [...Array(st.need).keys()])
+    assert.ok(d.some((v, i) => v !== i))
+    g.game.submitPuzzle(t, d.map((_, i) => (i + 1) % d.length)) // sai hay đúng không quan trọng: display không đổi
+    assert.deepEqual(puzzleDisplay(getTram(g.db, t)), d)
   }
 })
 
@@ -557,11 +564,14 @@ test('special: tạm dừng giữa câu -> câu còn đủ giờ như trước k
 
 function puzzleAt(opts = {}) {
   const g = specialAt(opts)
-  for (const t of g.teams) setTram(g.db, t.id, { stage: 'puzzle' })
+  for (const t of g.teams) {
+    const cur = getTram(g.db, t.id)
+    setTram(g.db, t.id, { stage: 'puzzle', puzzle: { ...cur.puzzle, display: [2, 0, 4, 1, 3] } })
+  }
   // thứ tự đúng theo vị trí hiện: vị trí của mảnh i
   g.solve = t => {
     const st = getTram(g.db, t)
-    const shown = puzzleDisplay(t, st.period, st.need)
+    const shown = puzzleDisplay(st)
     return [...Array(st.need).keys()].map(i => shown.indexOf(i))
   }
   return g
