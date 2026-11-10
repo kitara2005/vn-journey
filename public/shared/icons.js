@@ -223,6 +223,13 @@ const ICONS = {
     + `<rect x="4" y="23.5" width="24" height="6" rx="3" fill="${C.goldDark}"/><rect x="4" y="22.5" width="24" height="6" rx="3" fill="${C.gold}"/>`
     + `<path d="M11 13h10M11 17h10M11 21h6" stroke="${C.wood}" stroke-width="1.8"/>`,
 
+  // Khung cảnh thời kỳ: trống đồng, thuyền (nón lá dùng icon hat)
+  'trống': `<ellipse cx="16" cy="9" rx="11" ry="4" fill="${C.goldDark}"/><path d="M5 9c2 6 3 9 3 14h16c0-5 1-8 3-14z" fill="${C.yellow}"/>`
+    + `<ellipse cx="16" cy="9" rx="11" ry="4" fill="${C.gold}"/><circle cx="16" cy="9" r="2.6" fill="${C.goldDark}"/>`
+    + `<path d="M8.5 15h15M9 19h14" stroke="${C.yellowDark}" stroke-width="1.6" fill="none"/><path d="M8 23h16l2 4H6z" fill="${C.goldDark}"/>`,
+  'thuyền': `<path d="M3 20h26c-1 5-5 8-9 8h-8c-4 0-8-3-9-8z" fill="${C.wood}"/><path d="M5 20h22" stroke="${C.cream}" stroke-width="1.8"/>`
+    + `<path d="M16 4v16" stroke="${C.wood}" stroke-width="2"/><path d="M17.5 5l9 13h-9z" fill="${C.cream}"/><path d="M14.5 8l-7 10h7z" fill="${C.blueMid}"/>`,
+
   // ---- Nút điều khiển (currentColor) ----
   play: '<path d="M9 6v20l17-10z" fill="currentColor" stroke="currentColor" stroke-width="3"/>',
   pause: '<rect x="7.5" y="6" width="6" height="20" rx="2" fill="currentColor"/><rect x="18.5" y="6" width="6" height="20" rx="2" fill="currentColor"/>',

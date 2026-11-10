@@ -253,10 +253,7 @@ function renderOverlay() {
     : `${state.me.room.name} · ${state.me.members.length} người trong ${state.me.team.name}. Bản đồ sẽ mở khi trận đấu bắt đầu.`]
   else if (s === 'paused') [title, text] = state.me.shared ? ['Câu hỏi chung cả phòng', 'Trận tạm dừng trong lúc cả phòng cùng trả lời'] : ['Tạm dừng', 'Chủ phòng đang tạm dừng trận đấu']
   else if (s === 'ended' && !state.final) [title, text] = ['Hết giờ!', 'Đang tổng kết…']
-  // Phòng tram: đã mở map đặc biệt — màn riêng ở bước sau, tạm báo trên bản đồ
-  else if (s === 'running' && tram() && state.me.tram && state.me.tram.stage !== 'map') [title, text] = state.me.tram.stage === 'done'
-    ? ['Đã về đích', 'Đội bạn đã hoàn thành hành trình.']
-    : ['Đã mở map đặc biệt', 'Đội bạn đã nhặt đủ key. Màn map đặc biệt đang được hoàn thiện.']
+  // Phòng tram đã mở map đặc biệt: màn riêng ở tram-map.js phủ lên bản đồ (không dùng lớp phủ này)
   // holdLock: đang diễn cảnh "bị đẩy lui" trên tỉnh — chưa phủ màn khóa lên bản đồ
   else if (locked() && !state.holdLock) [title, text, calm] = ['Nghỉ chân', state.me.lastResult?.repelled
     ? 'Chủ nhà trả lời đúng trước — chờ hết thời gian để chơi tiếp'

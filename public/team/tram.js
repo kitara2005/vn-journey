@@ -10,6 +10,7 @@ import { toast } from './notify.js'
 import { act } from './actions.js'
 import { renderAll } from './render.js'
 import { showTab } from './menu.js'
+import { syncTramMap, tickTramMap } from './tram-map.js'
 import { hasPending, now, running, state } from './state.js'
 
 const STAR_HINT = {
@@ -98,15 +99,17 @@ export function renderTram() {
   // Tab đang mở vừa bị ẩn (Gợi ý khi chưa có hành trình, Thẻ bài trong phòng tram) → về Bản đồ
   const tab = $('app').dataset.tab
   if ((tab === 'hint' && $('hintTab').hidden) || (tab === 'cards' && isTram)) showTab('map')
-  if (!tr) return
+  if (!tr) { syncTramMap(); return }
   $('tramTray').replaceChildren(...trayCard(tr))
   $('tramBook').replaceChildren(...bookCard(tr))
   tickTram()
+  syncTramMap()
 }
 
 // Gọi mỗi 250 ms: đếm lùi tới mốc gợi ý cứu trợ (nửa thời lượng)
 export function tickTram() {
   const tr = state.me?.room.mode === 'tram' ? state.me.tram : null
+  tickTramMap()
   const r = $('tramRescue')
   if (!tr || !r) return
   const left = tr.rescueAt ? tr.rescueAt - now() : 0
