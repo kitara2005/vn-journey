@@ -75,9 +75,14 @@ function logText(e) {
     case 'tram-open': return [`Đủ key, map đặc biệt mở${e.free ? `: +${e.free} điểm` : ''}`, 'good']
     case 'tram-star': return e.on != null ? [`${who}${e.on ? 'bật' : 'tắt'} Ngôi sao hy vọng`]
       : e.gain ? [`Ngôi sao hy vọng ở ${p}: +${e.gain} điểm`, 'good'] : [`Ngôi sao hy vọng ở ${p}: −${e.lost} điểm`, 'bad']
+    case 'tram-rescue': return ['Gợi ý cứu trợ: đã mở gợi ý cho mọi key còn lại', 'good']
+    case 'tram-special':
+      if (e.puzzle === false) return [`${who}ghép mật thư chưa đúng thứ tự`, 'bad']
+      if (e.issued) return [`${who}nhận câu hỏi thời kỳ trên map đặc biệt`]
+      return e.correct ? [`${who}trả lời đúng câu thời kỳ${e.points ? `: +${e.points} điểm` : ''}`, 'good'] : [`${who}trả lời chưa đúng câu thời kỳ`, 'bad']
     case 'tram-finish': return [`Về đích! +${e.finishBonus} điểm`, 'good']
     case 'lost': return [`${p} đã đổi chủ!`, 'bad']
-    default: return [e.action]
+    default: return [e.action.startsWith('tram-') ? 'Chạy trạm: có diễn biến mới' : e.action]
   }
 }
 export function renderJournal() {

@@ -280,7 +280,7 @@ async function finishAnswer(r, q, value) {
       else if (r.golden) toast('Câu hỏi vàng chưa đúng — nghỉ chân gấp đôi', true, 'golden')
       else if (r.bet && tram()) toast(`Ngôi sao hy vọng chưa thành — trừ ${state.map.byId.get(q.province).points} điểm tỉnh`, true, 'star-hope')
       else if (r.bet) toast('Mạo hiểm chưa thành — chờ thêm 30 giây', true, 'bet')
-      else if (r.lostStreak >= 2) toast(`Mất chuỗi ${r.lostStreak} câu đúng`, true, 'streak')
+      else if (!tram() && r.lostStreak >= 2) toast(`Mất chuỗi ${r.lostStreak} câu đúng`, true, 'streak')
     }, fx.reducedMotion ? 500 : 1300)
     return
   }

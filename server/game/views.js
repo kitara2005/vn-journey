@@ -122,6 +122,8 @@ export function createViews(ctx) {
           ...(e.action === 'siege-bet' ? { rounds: d.rounds } : {}),
           ...(e.action === 'duel-round' ? { no: d.no, of: d.of, winner: d.winner, att: d.att, def: d.def } : {}),
           ...(e.action === 'topic' ? { bet: !!d?.bet } : {}),
+          // Phòng tram: chỉ chuyển các số / cờ cần để viết dòng nhật ký (không có id câu, tỉnh của key)
+          ...(e.action.startsWith('tram-') ? { n: d?.n, of: d?.of, level: d?.level, free: d?.free, on: d?.on, gain: d?.gain, lost: d?.lost, finishBonus: d?.finishBonus, correct: d?.correct, points: d?.points, puzzle: d?.puzzle, issued: d?.issued != null } : {}),
           topic: e.action === 'topic' ? (d?.topic ? topicNames.get(d.topic) ?? d.topic : 'Ngẫu nhiên') : null,
         }
       })

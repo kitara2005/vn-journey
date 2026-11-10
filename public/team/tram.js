@@ -9,6 +9,7 @@ import { closeDialog, openDialog } from './dialogs.js'
 import { toast } from './notify.js'
 import { act } from './actions.js'
 import { renderAll } from './render.js'
+import { showTab } from './menu.js'
 import { hasPending, now, running, state } from './state.js'
 
 const STAR_HINT = {
@@ -38,7 +39,7 @@ function setStar(on) {
       toast(on ? 'Đã bật Ngôi sao hy vọng cho câu tới' : 'Đã tắt Ngôi sao hy vọng', false, 'star-hope')
       renderAll()
     } catch (err) {
-      if (err.status === 409 && state.me?.tram) { state.me.tram.star = 'used'; closeDialog(); renderAll() }
+      if (err.code === 'star-used' && state.me?.tram) { state.me.tram.star = 'used'; closeDialog(); renderAll() }
       throw err
     }
   })
@@ -87,14 +88,17 @@ function bookCard(tr) {
 
 // Vẽ khối tram của màn team; phòng khác gọi cũng được (ẩn hết)
 export function renderTram() {
-  const tr = state.me?.room.mode === 'tram' ? state.me.tram : null
-  const on = !!tr
-  $('tramTray').hidden = !on
-  $('tramBook').hidden = !on
-  $('hintTab').hidden = !on
-  $('cardsTab').hidden = on
-  $('cardsCard').hidden = on
-  if (!on) return
+  const isTram = state.me?.room.mode === 'tram' // bố cục theo kiểu phòng, không theo việc đã có hành trình
+  const tr = isTram ? state.me.tram : null
+  $('tramTray').hidden = !tr
+  $('tramBook').hidden = !tr
+  $('hintTab').hidden = !tr
+  $('cardsTab').hidden = isTram
+  $('cardsCard').hidden = isTram
+  // Tab đang mở vừa bị ẩn (Gợi ý khi chưa có hành trình, Thẻ bài trong phòng tram) → về Bản đồ
+  const tab = $('app').dataset.tab
+  if ((tab === 'hint' && $('hintTab').hidden) || (tab === 'cards' && isTram)) showTab('map')
+  if (!tr) return
   $('tramTray').replaceChildren(...trayCard(tr))
   $('tramBook').replaceChildren(...bookCard(tr))
   tickTram()
