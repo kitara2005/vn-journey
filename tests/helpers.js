@@ -4,6 +4,7 @@ import { openDatabase, seedDatabase } from '../server/db.js'
 import { createGame } from '../server/game.js'
 import { hashSecret } from '../server/auth.js'
 import { RULES } from '../server/game/rules.js'
+import { tramFixture } from './fixtures/tram-content.js'
 
 export function memoryDb() {
   const db = openDatabase(':memory:')
@@ -31,10 +32,10 @@ let codeCounter = 0
 const testCode = n => String(++codeCounter).padStart(n, 'A').slice(-n)
 
 // questionLeadMs mặc định 0 trong test: giờ câu hỏi tính đúng từ lúc phát (test riêng kiểm tra mốc thật RULES.questionLeadMs)
-export function createCore(db = memoryDb(), now = fakeClock(), { questionLeadMs = 0 } = {}) {
+export function createCore(db = memoryDb(), now = fakeClock(), { questionLeadMs = 0, tramContent = tramFixture } = {}) {
   return createGame(db, {
     now, random: seededRandom(), freezeBeforeEndMin: 10, defaultDurationMin: 45, questionLeadMs,
-    newCode: testCode, hashSecret,
+    newCode: testCode, hashSecret, tramContent,
   })
 }
 
@@ -45,10 +46,10 @@ export function startNow(game, now) {
 }
 
 // Tạo một phòng có `teamCount` team (tên theo linh vật: Team Rồng, Team Lân, Team Rùa…)
-export function setupGame({ teamCount = 3, start = true, questionLeadMs = 0, ...roomOpts } = {}) {
+export function setupGame({ teamCount = 3, start = true, questionLeadMs = 0, tramContent = tramFixture, ...roomOpts } = {}) {
   const db = memoryDb()
   const now = fakeClock()
-  const core = createCore(db, now, { questionLeadMs })
+  const core = createCore(db, now, { questionLeadMs, tramContent })
   const created = core.createRoom({ name: 'Phòng test', teamCount, ...roomOpts })
   const game = core.room(created.roomId)
   if (start) startNow(game, now)
