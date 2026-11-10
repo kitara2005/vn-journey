@@ -7,6 +7,7 @@ import { createActions } from './actions.js'
 import { createViews } from './views.js'
 import { createOwner } from './owner.js'
 import { createShared } from './shared.js'
+import { createTram } from './tram.js'
 
 export function createRoomScope(ctx, roomId) {
   const { db, q, now, json, provinces, adjacency, collections, questionStats } = ctx
@@ -81,7 +82,8 @@ export function createRoomScope(ctx, roomId) {
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions })
   const { startShared, voteShared, settleShared, closeShared, sharedPublic } = createShared({ ...rctx, ...questions })
   const { journal, scores, teamView, screenView, ownerView, replay, news } = createViews({ ...rctx, ...questions, choiceFor, siegeBlock, sharedPublic })
-  const owner = createOwner({ ...rctx, scores, recordBoard })
+  const tram = createTram(rctx)
+  const owner = createOwner({ ...rctx, scores, recordBoard, tram })
   const { spawnSolo } = owner
   const { kickPlayer, renamePlayer, leave, releaseHost, start, pause, end, reset, triggerEvent, adjustScore, setTopicChoice, setBetChoice } = owner
   // Tiếp tục sau câu hỏi chung: công bố (nếu MC bấm sớm) rồi đóng câu, trận chạy tiếp

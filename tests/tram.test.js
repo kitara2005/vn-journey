@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadTramContent } from '../server/game/tram-content.js'
 import { tramFixture, tramFixtureWith } from './fixtures/tram-content.js'
-import { setupGame, createCore, memoryDb, placeTeam, correctAnswer, wrongAnswer } from './helpers.js'
+import { setupGame, createCore, memoryDb, placeTeam, correctAnswer, wrongAnswer, seededRandom } from './helpers.js'
+import { placeKeys } from '../server/game/tram.js'
 import { GameError } from '../server/game/rules.js'
 
 test('loadTramContent chỉ lấy mục reviewed', () => {
@@ -140,4 +141,77 @@ test('tram: hai team cùng có tem một tỉnh (không tranh tỉnh)', () => {
     assert.equal(g.game.answer(id, question.id, correctAnswer(g.db, id)).captured, true)
   }
   assert.equal(scoreOf(g, g.teams[0].id).base, scoreOf(g, g.teams[1].id).base)
+})
+
+// ---------- Bắt đầu trận: thời kỳ, rải key, mảnh ghép ----------
+test('placeKeys: 200 seed — đủ n, không trùng, không phải start/kề start; mỗi miền ≥ 1, không hai key kề', () => {
+  const { core } = setupGame({ start: false })
+  const { provinces, adjacency } = core
+  const eligible = [...tramFixture.hints.keys()]
+  const ids = [...provinces.keys()]
+  for (let seed = 1; seed <= 200; seed++) {
+    const start = ids[seed % ids.length]
+    const keys = placeKeys(start, 5, eligible, { provinces, adjacency, random: seededRandom(seed) })
+    assert.equal(keys.length, 5)
+    assert.equal(new Set(keys).size, 5)
+    for (const k of keys) {
+      assert.notEqual(k, start)
+      assert.ok(!adjacency.get(start).has(k))
+      assert.ok(eligible.includes(k))
+    }
+    assert.equal(new Set(keys.map(k => provinces.get(k).region)).size, 3)
+    for (const a of keys) for (const b of keys) assert.ok(a === b || !adjacency.get(a).has(b))
+  }
+})
+
+test('placeKeys: ít ứng viên vẫn đủ n (hạ ràng buộc)', () => {
+  const { core } = setupGame({ start: false })
+  const { provinces, adjacency } = core
+  const eligible = [...provinces.keys()].slice(0, 8)
+  const keys = placeKeys('ha-noi', 5, eligible, { provinces, adjacency, random: seededRandom(1) })
+  assert.equal(keys.length, 5)
+  assert.equal(new Set(keys).size, 5)
+})
+
+test('start() phòng tram: mỗi team có thời kỳ, 5 key, mảnh là hoán vị, tem ở tỉnh xuất phát', () => {
+  const g = setupGame({ mode: 'tram', teamCount: 3, start: false })
+  assert.equal(g.db.prepare('SELECT tram FROM teams WHERE room_id = ?').get(g.room.roomId).tram, null)
+  g.game.start()
+  for (const { id } of g.teams) {
+    const row = g.db.prepare('SELECT tram, current_province FROM teams WHERE id = ?').get(id)
+    const st = JSON.parse(row.tram)
+    assert.equal(st.need, 5)
+    assert.equal(st.keys.length, 5)
+    assert.deepEqual(st.keys.map(k => k.piece).sort(), [0, 1, 2, 3, 4])
+    assert.equal(st.stage, 'map')
+    assert.equal(st.star, 'ready')
+    assert.ok(tramFixture.periods.has(st.period))
+    assert.ok(st.keys.every(k => k.hint === 0 && !k.found && !g.core.adjacency.get(row.current_province).has(k.province) && k.province !== row.current_province))
+    assert.equal(g.db.prepare('SELECT COUNT(*) n FROM stamps WHERE team_id = ? AND province_id = ?').get(id, row.current_province).n, 1)
+  }
+})
+
+test('reset() phòng tram xóa teams.tram và tem; start() lại rải mới', () => {
+  const g = setupGame({ mode: 'tram', teamCount: 2, start: false })
+  g.game.start()
+  g.game.reset()
+  assert.equal(g.db.prepare('SELECT COUNT(*) n FROM teams WHERE room_id = ? AND tram IS NOT NULL').get(g.room.roomId).n, 0)
+  assert.equal(g.db.prepare('SELECT COUNT(*) n FROM stamps WHERE room_id = ?').get(g.room.roomId).n, 0)
+  g.game.start()
+  assert.equal(g.db.prepare('SELECT COUNT(*) n FROM teams WHERE room_id = ? AND tram IS NOT NULL').get(g.room.roomId).n, 2)
+})
+
+test('phòng tram: không có sự kiện MC và câu hỏi chung', () => {
+  const g = setupGame({ mode: 'tram', teamCount: 2 })
+  for (const f of [() => g.game.triggerEvent('rumor'), () => g.game.triggerEvent('golden'), () => g.game.startShared()]) {
+    assert.throws(f, e => e instanceof GameError && e.code === 'tram-no-events' && e.status === 409)
+  }
+})
+
+test('phòng tram: pause/resume chạy được (gọi shift)', () => {
+  const g = setupGame({ mode: 'tram', teamCount: 2 })
+  g.game.pause()
+  g.now.advance(5000)
+  g.game.resume()
+  assert.equal(g.game.state().status, 'running')
 })
