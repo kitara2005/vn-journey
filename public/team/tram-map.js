@@ -8,10 +8,12 @@ import * as fx from '/shared/fx.js'
 import { ICON_NAMES, icon, labeled } from '/shared/icons.js'
 import { $, button, el } from '/shared/dom.js'
 import { act } from './actions.js'
+import { closeDialog } from './dialogs.js'
 import { toast } from './notify.js'
 import { now, state } from './state.js'
 
 const POINTS = 500 // điểm câu thời kỳ (RULES.tram.specialPoints), dùng để hiện "còn bao nhiêu điểm"
+const HOLD_MS = 5000 // chờ tối đa chừng này cho khung kết quả / câu cũ trước khi chuyển sang map đặc biệt
 const EXPIRE_GRACE_MS = 2500 // quá hạn chừng này mà câu còn treo thì tự bỏ qua để sang câu khác
 
 // Tên icon trong nội dung → icon có sẵn; tên lạ thì dùng icon cuộn giấy (không để lỗi)
@@ -26,6 +28,8 @@ const L = {
   result: null,     // kết quả câu vừa trả lời: { correct, points, correctAnswer, explanation, timedOut, skipped }
   lockUntil: 0,     // mốc khóa biết từ phản hồi (SSE về sau cũng gửi lại)
   skipArmedAt: 0,   // bấm "Bỏ qua" lần 1 lúc nào (lần 2 trong 3 giây mới bỏ thật)
+  holdSince: 0,     // lúc bắt đầu chờ khung câu / kết quả đóng
+  skipRetryAt: 0,   // sau lỗi mạng, đợi tới mốc này mới tự bỏ qua lại
   autoSkip: null,   // câu đã tự bỏ qua vì quá hạn
   order: [],        // câu ghép: các `i` theo thứ tự đã xếp
   pieceSig: '',     // bộ mảnh hiện tại (đổi thì xếp lại từ đầu)
@@ -53,7 +57,14 @@ const puzzleLockOf = tr => Math.max(L.pLock, tr.puzzle?.lockedUntil ?? 0)
 // Có nên hiện màn map đặc biệt chưa: đợi hiệu ứng "đúng + key + mảnh" của câu cuối diễn xong và đóng khung kết quả (spec §3.6)
 function shown(tr) {
   if (!tr || tr.stage === 'map' || state.me.status !== 'running' || !tr.period) return false
-  if (state.answering || state.dialogMode === 'question' || state.dialogMode === 'result') return false
+  if (state.answering || state.dialogMode === 'question' || state.dialogMode === 'result') {
+    // Chờ hiệu ứng kết quả của máy này diễn xong; nhưng chỉ chờ tối đa HOLD_MS (máy đồng đội có thể còn khung kết quả / câu cũ chưa đóng)
+    L.holdSince ||= now()
+    if (now() - L.holdSince < HOLD_MS) return false
+    state.answering = false
+    if (state.dialogMode === 'question' || state.dialogMode === 'result') closeDialog()
+  }
+  L.holdSince = 0
   return true
 }
 
@@ -147,7 +158,7 @@ function puzzlePanel(tr) {
   const sig = pz.pieces.map(p => `${p.i}:${p.text}`).join('|')
   if (sig !== L.pieceSig) { L.pieceSig = sig; L.order = []; L.pMsg = '' }
   const left = puzzleLockOf(tr) - now()
-  const full = L.order.length === pz.pieces.length
+  const full = pz.pieces.length > 0 && L.order.length === pz.pieces.length
   const rowBtns = L.order.map((i, n) => el('li', {}, el('button', {
     type: 'button', class: 'btn piece in-row', title: 'Bấm để gỡ khỏi hàng', disabled: L.sending,
     onclick: () => { L.order = L.order.filter(x => x !== i); L.pMsg = ''; L.v++; sound.click(); sync(true) },
@@ -213,7 +224,7 @@ export function syncTramMap(force = false) {
     toast('Đồng đội đã trả lời câu này trước bạn')
   }
   // Câu quá hạn mà vẫn còn treo (server không tự xóa): tự bỏ qua để cả đội sang câu khác
-  if (p && t > p.deadline + EXPIRE_GRACE_MS && L.autoSkip !== p.id && !state.busy && !L.sending) {
+  if (p && t > p.deadline + EXPIRE_GRACE_MS && L.autoSkip !== p.id && now() >= L.skipRetryAt && !state.busy && !L.sending) {
     L.autoSkip = p.id
     skip(true)
   }
@@ -312,14 +323,14 @@ function skip(auto = false) {
       afterAnswer({ ...r, skipped: !auto, timedOut: auto })
     } catch (err) {
       L.sending = false; L.v++
-      if (err.code !== 'no-pending') throw err // đồng đội xử trước: SSE sẽ cập nhật
+      if (err.code !== 'no-pending') { if (auto) { L.autoSkip = null; L.skipRetryAt = now() + 3000 } throw err } // lỗi khác: nhịp sau thử lại; no-pending = đồng đội xử trước, SSE cập nhật
     } finally { sync(true) }
   })
 }
 
 function submitPuzzle() {
   const tr = state.me?.tram
-  if (!tr?.puzzle || L.sending || state.busy || L.order.length !== tr.puzzle.pieces.length) return
+  if (!tr?.puzzle || L.sending || state.busy || !tr.puzzle.pieces.length || L.order.length !== tr.puzzle.pieces.length) return
   L.sending = true; L.v++; sync(true)
   act(async () => {
     try {

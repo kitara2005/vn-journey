@@ -96,3 +96,4 @@ dialog.docked[open]:not(.shake) { animation: dock-in .5s cubic-bezier(.25, 1.25,
   .ts-panel { padding: 12px 12px 14px; }
   .ts-q { font-size: 16px; }
 }
+.ts-panel .q-timer { font-size: 15px; } /* đồng hồ câu thời kỳ: màu xám, quá mốc đủ điểm thì đỏ (.late) như câu tỉnh, định nghĩa ở team.css */
