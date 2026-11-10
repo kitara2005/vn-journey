@@ -252,6 +252,7 @@ export function createViews(ctx) {
   // Chủ phòng thấy tiến độ từng team (số key, giai đoạn, về đích) — không thấy tỉnh của key
   const tramOwner = t => {
     const st = json(t.tram)
+    if (!st) return {} // chưa bắt đầu / đã chơi lại
     return { keys: st.keys.filter(k => k.found).length, need: st.need, stage: st.stage, finished: st.finishedAt != null }
   }
 

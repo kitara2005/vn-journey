@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadTramContent } from '../server/game/tram-content.js'
 import { tramFixture, tramFixtureWith } from './fixtures/tram-content.js'
-import { setupGame, createCore, memoryDb, placeTeam, setTram, getTram, correctAnswer, wrongAnswer, seededRandom } from './helpers.js'
+import { setupGame, createCore, memoryDb, placeTeam, setTram, getTram, correctAnswer, wrongAnswer, seededRandom, startNow } from './helpers.js'
 import { placeKeys } from '../server/game/tram.js'
 import { GameError, byRank } from '../server/game/rules.js'
 
@@ -640,6 +640,7 @@ test('teamView.tram: không lộ tỉnh key chưa nhặt, thời kỳ chưa mở
   const period = tramFixture.periods.get(st.period)
   for (const s of [period.name, period.puzzle.text, '"answer"', '"keys":[', '"province":"ca-mau"']) assert.ok(!text.includes(s), `lộ ${s}`)
   assert.ok(!text.includes(period.questions[0].content))
+  assert.ok(!text.includes(period.id), 'lộ id thời kỳ')
   // mở map: có period.name, vẫn không có đáp án / chữ ghép đầy đủ
   setTram(g.db, t, { stage: 'special', openedAt: g.now() })
   const open = g.game.teamView(t)
@@ -741,4 +742,20 @@ test('người vào muộn: teamView có đủ gợi ý và mảnh đã nhặt',
   assert.deepEqual(v.pieces, [splits[keys[2].piece]])
   assert.equal(v.found, 1)
   assert.equal(v.nextHintIn, 2)
+})
+
+test('tram: teamView / ownerView không lỗi khi chưa bắt đầu và sau reset', () => {
+  const g = setupGame({ mode: 'tram', start: false })
+  const t = g.teams[0].id
+  const check = () => {
+    assert.equal(g.game.teamView(t).tram, null)
+    const o = g.game.ownerView().teams[0]
+    assert.equal(o.keys, undefined)
+    assert.ok(g.game.screenView())
+  }
+  check()
+  startNow(g.game, g.now)
+  assert.ok(g.game.teamView(t).tram)
+  g.game.reset()
+  check()
 })

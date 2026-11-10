@@ -307,7 +307,8 @@ export function createTram(ctx) {
       if (!Array.isArray(order) || order.length !== n || new Set(order).size !== n || !order.every(v => Number.isInteger(v) && v >= 0 && v < n)) {
         throw new GameError('bad-order', 'Thứ tự mảnh ghép không hợp lệ')
       }
-      const shown = st.puzzle.display ??= randomDisplay(n)
+      const shown = st.puzzle.display
+      if (!shown) throw new GameError('no-display', 'Thiếu thứ tự mảnh ghép', 500)
       if (!order.every((pos, i) => shown[pos] === i)) {
         st.puzzle.lockedUntil = now() + RULES.tram.lockMs
         st.puzzle.tries += 1
@@ -335,12 +336,13 @@ export function createTram(ctx) {
   // thời kỳ chỉ lộ sau khi mở map
   function teamPublic(t, now_ = now()) {
     const st = state(t)
+    if (!st) return null // chưa bắt đầu / đã chơi lại: team chưa có hành trình
     const room = q.room.get(roomId)
     const period = content.periods.get(st.period)
     const splits = period.puzzle.splits[String(st.need)]
     let puzzle = null
     if (st.stage === 'puzzle') {
-      if (!st.puzzle.display) { st.puzzle.display = randomDisplay(st.need); save(t.id, st) } // cùng thứ tự với submitPuzzle
+      if (!st.puzzle.display) throw new GameError('no-display', 'Thiếu thứ tự mảnh ghép', 500) // luôn có từ lúc vào câu ghép
       puzzle = {
         pieces: st.puzzle.display.map((pieceIndex, i) => ({ i, text: splits[pieceIndex] })),
         lockedUntil: st.puzzle.lockedUntil && st.puzzle.lockedUntil > now_ ? st.puzzle.lockedUntil : null,
