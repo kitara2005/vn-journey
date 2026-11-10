@@ -227,7 +227,7 @@ async function loadRooms() {
 
 const STATUS = { waiting: ['wait', 'Đang chờ'], running: ['run', 'Đang chơi'], paused: ['wait', 'Tạm dừng'], ended: ['end', 'Đã xong'] }
 const tag = (cls, text) => el('span', { class: `tag ${cls}` }, text)
-const modeTag = mode => mode === 'solo' ? tag('solo', 'Chơi đơn') : tag('team', 'Theo team')
+const modeTag = mode => mode === 'solo' ? tag('solo', 'Chơi đơn') : mode === 'tram' ? tag('tram', 'Chạy trạm') : tag('team', 'Theo team')
 function roomTime(r) {
   if (r.status === 'waiting') return `${r.durationMin} phút`
   if (r.status === 'ended') return `xong ${clock(r.endsAt ?? r.createdAt)}`
@@ -300,10 +300,12 @@ function roomForm(r = null) {
   const waiting = !r || r.status === 'waiting'
   const field = (label, input, note = '') => el('label', {}, label, input, note ? el('small', { class: 'lockn' }, note) : '')
   const name = el('input', { class: 'qt-input', maxlength: 40, required: true, value: r?.name ?? '' })
-  const mode = el('select', { class: 'qt-input', disabled: !!r }, el('option', { value: 'team' }, 'Theo team'), el('option', { value: 'solo' }, 'Chơi đơn'))
+  const mode = el('select', { class: 'qt-input', disabled: !!r }, el('option', { value: 'team' }, 'Theo team'), el('option', { value: 'solo' }, 'Chơi đơn'), el('option', { value: 'tram' }, 'Chạy trạm'))
   mode.value = r?.mode ?? 'team'
   const teams = el('select', { class: 'qt-input', disabled: !!r }, ...[2, 3, 4, 5, 6, 7, 8].map(n => el('option', { value: n }, `${n} team`)))
   teams.value = String(r?.teams || 4)
+  const keys = el('select', { class: 'qt-input', disabled: !!r }, ...[3, 4, 5, 6, 7].map(n => el('option', { value: n }, `${n} key`)))
+  keys.value = String(r?.keyCount ?? 5)
   const duration = el('input', { class: 'qt-input', type: 'number', min: 10, max: 90, value: r?.durationMin ?? 45, disabled: !waiting })
   const quiz = el('select', { class: 'qt-input', disabled: !waiting }, ...[1, 2, 3].map(n => el('option', { value: n }, `${n} câu`)))
   quiz.value = String(r?.quizCount ?? 1)
@@ -316,15 +318,25 @@ function roomForm(r = null) {
   }
   const [betLabel, bet] = check('Đặt cược (Mạo hiểm)', r?.betChoice ?? true)
   const [topicLabel, topic] = check('Cho chọn chủ đề', r?.topicChoice ?? false)
+  const lock = r && !waiting ? 'Khóa khi đã bắt đầu' : ''
+  const quizField = field('Số câu mỗi tỉnh', quiz, lock)
   const teamField = field('Số team', teams, r ? 'Không đổi sau khi tạo' : '')
-  const syncMode = () => { teamField.hidden = mode.value === 'solo' }
+  const keyField = field('Số key', keys, r ? 'Không đổi sau khi tạo' : '')
+  // Chạy trạm: có số key, không có cược / chủ đề / số câu mỗi tỉnh; thời lượng tối thiểu 30 phút
+  const syncMode = () => {
+    const tram = mode.value === 'tram'
+    teamField.hidden = mode.value === 'solo'
+    keyField.hidden = !tram
+    quizField.hidden = betLabel.hidden = topicLabel.hidden = tram
+    duration.min = tram ? 30 : 10
+    if (tram && !r && Number(duration.value) < 30) duration.value = 30
+  }
   mode.addEventListener('change', syncMode)
   syncMode()
-  const lock = r && !waiting ? 'Khóa khi đã bắt đầu' : ''
   const body = el('div', { class: 'rf' },
     el('label', { class: 'full' }, 'Tên phòng', name),
-    field('Kiểu phòng', mode, r ? 'Không đổi sau khi tạo' : ''), teamField,
-    field('Thời lượng (phút)', duration, lock), field('Số câu mỗi tỉnh', quiz, lock),
+    field('Kiểu phòng', mode, r ? 'Không đổi sau khi tạo' : ''), teamField, keyField,
+    field('Thời lượng (phút)', duration, lock), quizField,
     el('label', { class: 'full' }, 'Hiển thị', listed),
     el('div', { class: 'full chks' }, betLabel, topicLabel),
   )
@@ -339,7 +351,7 @@ function roomForm(r = null) {
         toast('Đã lưu phòng')
         return refresh()
       }
-      const c = await api('/api/sys/rooms', { ...data, mode: mode.value, teamCount: Number(teams.value) })
+      const c = await api('/api/sys/rooms', { ...data, mode: mode.value, teamCount: Number(teams.value), ...(mode.value === 'tram' && { keyCount: Number(keys.value) }) })
       await refresh()
       // Hiện mã ngay sau khi tạo (mã chủ phòng xem lại được ở nút Mã)
       setTimeout(() => dialog({

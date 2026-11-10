@@ -1,6 +1,7 @@
 // Định tuyến HTTP. Tách khỏi index.js để test gọi trực tiếp được.
 // Mọi phiên gắn với một phòng: người chơi / chủ phòng / màn chiếu chỉ thấy dữ liệu phòng của mình.
 
+import { loadTramContent } from './game/tram-content.js'
 import { createGame, GameError, RULES } from './game.js'
 import { randomBytes } from 'node:crypto'
 import { readFileSync, readdirSync, statSync, createReadStream, mkdirSync, existsSync } from 'node:fs'
@@ -31,6 +32,7 @@ export function createApp({ db, config, now = Date.now, random = Math.random }) 
     sealSecret: sealer.seal,
     defaultDurationMin: config.gameDurationMin,
     freezeBeforeEndMin: config.freezeBeforeEndMin,
+    ...(config.tramContentDir && { tramContent: loadTramContent(config.tramContentDir) }),
   })
   const auth = createAuth(db, { now })
   // Loại dữ liệu realtime mỗi vai được xem. Trang tự chọn bằng ?view= (chủ phòng mở màn chiếu cần dữ liệu màn chiếu)

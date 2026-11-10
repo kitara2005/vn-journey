@@ -207,6 +207,22 @@ const ICONS = {
     + `<g fill="${C.blueMid}"><rect x="6.5" y="13" width="3" height="11"/><rect x="11.8" y="13" width="3" height="11"/><rect x="17.2" y="13" width="3" height="11"/><rect x="22.5" y="13" width="3" height="11"/></g>`
     + `<rect x="3.5" y="24" width="25" height="3" rx="1" fill="${C.blueDark}"/><rect x="2" y="27" width="28" height="2.5" rx="1" fill="${C.blue}"/>`,
 
+  // ---- Chạy trạm ----
+  // Chìa khóa vàng nằm chéo: thân + răng, vành tròn có lỗ
+  key: `<g transform="rotate(45 16 16)"><rect x="12" y="15.7" width="17" height="3.4" rx="1.4" fill="${C.goldDark}"/><rect x="22" y="18.7" width="3" height="5.4" rx="1" fill="${C.goldDark}"/><rect x="26.8" y="18.7" width="2.6" height="4.2" rx="1" fill="${C.goldDark}"/><circle cx="7.5" cy="17.2" r="6.6" fill="${C.goldDark}"/>`
+    + `<rect x="12" y="14.5" width="17" height="3.4" rx="1.4" fill="${C.yellow}"/><rect x="22" y="17.5" width="3" height="5.4" rx="1" fill="${C.yellow}"/><rect x="26.8" y="17.5" width="2.6" height="4.2" rx="1" fill="${C.yellow}"/><circle cx="7.5" cy="16" r="6.6" fill="${C.yellow}"/>`
+    + `<circle cx="7.5" cy="16" r="2.6" fill="#fff"/></g>`,
+  // Ngôi sao hy vọng: sao vàng to có tia sáng xanh nhỏ
+  'star-hope': `<path d="${star(15, 18, 12.5, 5.4)}" fill="${C.orange}" stroke="${C.orange}" stroke-width="2"/>`
+    + `<path d="${star(15, 16.8, 12.5, 5.4)}" fill="${C.yellow}" stroke="${C.yellow}" stroke-width="2"/>`
+    + `<path d="M25.5 3l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="${C.blue}"/>`
+    + shine('M10.6 13.8l1.6-.3'),
+  // Cuộn giấy: nhật ký hành trình / câu đố
+  scroll: `<rect x="7" y="7" width="18" height="21" rx="1.5" fill="${C.gold}"/><rect x="7" y="5.5" width="18" height="21" rx="1.5" fill="${C.cream}"/>`
+    + `<rect x="4" y="3.5" width="24" height="6" rx="3" fill="${C.goldDark}"/><rect x="4" y="2.5" width="24" height="6" rx="3" fill="${C.gold}"/>`
+    + `<rect x="4" y="23.5" width="24" height="6" rx="3" fill="${C.goldDark}"/><rect x="4" y="22.5" width="24" height="6" rx="3" fill="${C.gold}"/>`
+    + `<path d="M11 13h10M11 17h10M11 21h6" stroke="${C.wood}" stroke-width="1.8"/>`,
+
   // ---- Nút điều khiển (currentColor) ----
   play: '<path d="M9 6v20l17-10z" fill="currentColor" stroke="currentColor" stroke-width="3"/>',
   pause: '<rect x="7.5" y="6" width="6" height="20" rx="2" fill="currentColor"/><rect x="18.5" y="6" width="6" height="20" rx="2" fill="currentColor"/>',
