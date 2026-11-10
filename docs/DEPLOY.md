@@ -320,6 +320,10 @@ journalctl -u vn-journey -n 20
   sudo systemctl start vn-journey
   ```
   **Mất toàn bộ phòng, bảng xếp hạng và tài khoản quản trị** (tạo lại bằng `admin-create.mjs`). Không làm việc này từ 23/11 trở đi.
+- **Chế độ Chạy trạm (nhánh `custom-gameplay`):**
+  - Đổi `data/periods.json` / `data/key-hints.json` (nội dung, cờ `reviewed`) **chỉ cần `git pull` + `sudo systemctl restart vn-journey`** — server nạp lúc khởi động, **không** `db:reset`.
+  - Schema đổi (`rooms.mode` thêm `'tram'`, `rooms.key_count`, `teams.tram`) → **lần deploy đầu của nhánh này cần `init-db.mjs --reset` (`pnpm run db:reset`) một lần** — **xóa toàn bộ phòng, bảng xếp hạng và tài khoản quản trị**. Làm đúng thủ tục ở trên: xuất câu hỏi đã sửa ở `/quan-tri` → Xuất questions.json, commit + push trước khi reset. Xong tạo lại tài khoản quản trị.
+  - **Không đặt `TRAM_CONTENT_DIR` trong `.env` trên host** (biến chỉ cho dev, trỏ tới nội dung bỏ qua cờ `reviewed`). Production luôn đọc `data/`; nội dung chưa duyệt không phát được.
 - **Quay lại bản trước** khi bản mới lỗi:
   ```bash
   $G tag --list 'deploy-*'                 # chọn mốc trước đó
