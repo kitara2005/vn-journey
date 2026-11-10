@@ -103,7 +103,12 @@ Tổng: 84 câu + 7 câu ghép.
 - Ưu tiên dựng từ **sự thật đã có nguồn** trong `questions.json` của chính tỉnh đó (dùng lại `sources` đã kiểm chứng) → ít tốn lượt tìm kiếm. Không trích nguyên văn câu hỏi trạm (tránh team vừa nhận gợi ý vừa gặp đúng câu đó).
 - Không nêu tên tỉnh mới, tỉnh cũ, trung tâm hành chính. **Được** nhắc đặc sản / lễ hội / danh thắng của tỉnh cũ đã sáp nhập [Claude]; bù lại, sổ gợi ý và tooltip bản đồ của mode này hiện **các tỉnh cũ đã gộp** vào mỗi tỉnh mới (`mergedFrom`) để người chơi lần ra được [Claude].
 
-### 4.3. Định dạng dữ liệu [Claude]
+### 4.3. Chủ dự án tự duyệt [CĐA]
+- Câu hỏi lịch sử, câu ghép mảnh và câu đố gợi ý đều qua **chủ dự án duyệt** trước khi dùng trong game (sau bước kiểm chứng chéo).
+- Dựng trang duyệt tĩnh giống `docs/questions-review.html` (mở rộng `scripts/build-review.mjs` hoặc script riêng) [Claude].
+- Mỗi thời kỳ / mỗi tỉnh có cờ `reviewed: true` do chủ dự án bật sau khi duyệt; game chỉ random tới thời kỳ đã duyệt và chỉ rải key ở tỉnh có gợi ý đã duyệt [Claude]. Nội dung nên giao theo đợt để chủ dự án duyệt dần, không dồn sát 21/11.
+
+### 4.4. Định dạng dữ liệu [Claude]
 - `data/periods.json`: danh sách thời kỳ { id, name, years, scene, questions[], puzzle { text, pieces[], explanation, sources } }.
 - `data/key-hints.json`: { provinceId: [hint1, hint2] }, mỗi hint có `text`, `sources`.
 - `scripts/validate-data.mjs` kiểm tra thêm hai file này (có nguồn, đủ số lượng, không chứa tên tỉnh).
