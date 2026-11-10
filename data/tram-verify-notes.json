@@ -1,0 +1,212 @@
+{
+  "van-lang-01": {
+    "verdict": "ok",
+    "issues": [
+      "nhandan, baovanhoa xác nhận 10/3 âm lịch."
+    ]
+  },
+  "van-lang-02": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-03": {
+    "verdict": "ok",
+    "issues": [
+      "\"Nhạc khí chủ yếu là trống đồng\" chỉ nhandan nói rõ; UNESCO/thanhtra chỉ nhắc đánh trống đồng. Giữ, nguồn mỏng."
+    ]
+  },
+  "van-lang-04": {
+    "verdict": "ok",
+    "issues": [
+      "thitruongtaichinhtiente chỉ nói bánh chưng trong ngày giỗ Tổ, không nói bánh dày; nhandan nói bắt buộc có bánh chưng, bánh dày."
+    ]
+  },
+  "van-lang-05": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-06": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-07": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-08": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-09": {
+    "verdict": "ok",
+    "issues": [
+      "Nguồn nhandan: có nhà sàn mái cong hình thuyền trên trống đồng Đông Sơn; daibieunhandan chỉ gián tiếp."
+    ]
+  },
+  "van-lang-10": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-11": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "van-lang-12": {
+    "verdict": "ok",
+    "issues": [
+      "nhandan: thi bơi thuyền rồng trên hồ Đá Vao; thanhtra: giải bơi chải trên sông Lô."
+    ]
+  },
+  "van-lang-puzzle": {
+    "verdict": "fix",
+    "issues": [
+      "Không tìm được nguồn trích nguyên văn câu ca dao \"Nhớ ngày giỗ Tổ mùng mười tháng ba\" (nhandan, thanhtra, baovanhoa đều không có). Đổi sang câu khẳng định có nguồn."
+    ]
+  },
+  "nha-ly-01": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-ly-02": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-ly-03": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-ly-04": {
+    "verdict": "ok",
+    "issues": [
+      "tuoitre: QTG lập 1076 (Lý Nhân Tông), ban đầu cho hoàng tử; giaoduc.net.vn xác nhận."
+    ]
+  },
+  "nha-ly-05": {
+    "verdict": "fix",
+    "issues": [
+      "Bỏ chi tiết \"thờ thêm Chu Văn An\" vì chưa kiểm chứng."
+    ]
+  },
+  "nha-ly-06": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-ly-07": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-ly-08": {
+    "verdict": "ok",
+    "issues": [
+      "kienthuc nói bia dựng 1121 theo lệnh Lý Nhân Tông; sggp: Lý Nhân Tông xây bia 1121, Bảo vật quốc gia; nhandan không nói rõ về bia. Đã thay nhandan bằng sggp."
+    ]
+  },
+  "nha-ly-09": {
+    "verdict": "drop",
+    "issues": [
+      "Bia tiến sĩ 1484 thuộc đời Lê Thánh Tông, không thuộc nhà Lý."
+    ]
+  },
+  "nha-ly-10": {
+    "verdict": "fix",
+    "issues": [
+      "Hai nguồn cùng báo Nhân Dân; thêm Thanh Niên, Báo Văn hóa (tiêu đề/tóm tắt xác nhận 2010, phiên 34 UNESCO)."
+    ]
+  },
+  "nha-ly-new-mot-cot": {
+    "verdict": "fix",
+    "issues": [
+      "Câu mới thay nha-ly-09; 3 nguồn (VietnamPlus, VnExpress, Thanh Niên) xác nhận 1049, Lý Thái Tông."
+    ]
+  },
+  "nha-ly-puzzle": {
+    "verdict": "ok",
+    "issues": [
+      "vnexpress + nhandan xác nhận dời đô Hoa Lư -> Đại La, đổi Thăng Long 1010."
+    ]
+  },
+  "nha-nguyen-01": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-nguyen-02": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-nguyen-03": {
+    "verdict": "drop",
+    "issues": [
+      "Hai bài cùng Báo Pháp luật, chưa có nguồn độc lập thứ hai nói rõ đại nhạc/tiểu nhạc dùng dịp nào (vietnam.travel không xác nhận)."
+    ]
+  },
+  "nha-nguyen-04": {
+    "verdict": "fix",
+    "issues": [
+      "Bỏ chi tiết \"1826, gỗ lim\" (chỉ 1 nguồn Báo Pháp luật). Thiếu nguồn độc lập thứ hai mạnh; sggp chỉ xác nhận là nhà hát."
+    ]
+  },
+  "nha-nguyen-05": {
+    "verdict": "ok",
+    "issues": []
+  },
+  "nha-nguyen-06": {
+    "verdict": "drop",
+    "issues": [
+      "Cắt bớt: quá nhiều câu Cửu đỉnh (giữ tối đa 2: 05, 07). Nội dung đúng (3 nguồn)."
+    ]
+  },
+  "nha-nguyen-07": {
+    "verdict": "fix",
+    "issues": [
+      "Bỏ cụm \"địa dư chí\" chưa kiểm chứng."
+    ]
+  },
+  "nha-nguyen-08": {
+    "verdict": "drop",
+    "issues": [
+      "Cắt bớt do đa dạng (Cửu đỉnh). Nội dung đúng: 162 hình."
+    ]
+  },
+  "nha-nguyen-09": {
+    "verdict": "drop",
+    "issues": [
+      "Cắt bớt do đa dạng; nguồn không nêu tên Gia Long trực tiếp (chỉ thụy hiệu Thế tổ Cao hoàng đế)."
+    ]
+  },
+  "nha-nguyen-10": {
+    "verdict": "drop",
+    "issues": [
+      "Cắt bớt do đa dạng; Bảo vật quốc gia 2012 đúng (baophapluat, nhandan)."
+    ]
+  },
+  "nha-nguyen-11": {
+    "verdict": "fix",
+    "issues": [
+      "Nguồn VnExpress chỉ gián tiếp (mộc bản Chiếu dời đô, niên đại Lê/Nguyễn chưa rõ); thay bằng Báo Lâm Đồng (khắc ngược chữ Hán Nôm)."
+    ]
+  },
+  "nha-nguyen-12": {
+    "verdict": "drop",
+    "issues": [
+      "Chùa Thiên Mụ lập 1601 thời chúa Nguyễn Hoàng, trước triều Nguyễn (1802), lệch thời kỳ."
+    ]
+  },
+  "nha-nguyen-new-kinh-thanh": {
+    "verdict": "fix",
+    "issues": [
+      "Câu mới (VnExpress, Thanh Niên): khởi công 1805 dưới Gia Long."
+    ]
+  },
+  "nha-nguyen-new-moc-ban-unesco": {
+    "verdict": "fix",
+    "issues": [
+      "Câu mới (Báo Chính phủ, Báo Lâm Đồng, Tiền Phong): UNESCO 2009."
+    ]
+  },
+  "nha-nguyen-puzzle": {
+    "verdict": "ok",
+    "issues": [
+      "nhandan + baophapluat xác nhận Nhã nhạc vinh danh 7/11/2003."
+    ]
+  }
+}
