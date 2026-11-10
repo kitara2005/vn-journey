@@ -103,7 +103,7 @@ export function createRoomScope(ctx, roomId) {
     armStar: (teamId, on, by) => tram.armStar(teamId, on, by),
     specialNext: (teamId, by) => tram.specialNext(teamId, by),
     specialAnswer: (teamId, questionId, given, by) => tram.specialAnswer(teamId, questionId, given, by),
-    specialSkip: (teamId, by) => tram.specialSkip(teamId, by),
+    specialSkip: (teamId, questionId, by) => tram.specialSkip(teamId, questionId, by),
     submitPuzzle: (teamId, order, by) => tram.submitPuzzle(teamId, order, by),
     questionStats: () => questionStats(roomId),
   }

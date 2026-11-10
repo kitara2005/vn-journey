@@ -8,10 +8,11 @@ const TRIES = 200
 
 // Rải n key cho tỉnh xuất phát `start`: ứng viên = eligible trừ start và tỉnh kề start.
 // Thử ngẫu nhiên tối đa 200 lần: mỗi miền ≥ 1 key và không hai key kề nhau; không được → 200 lần chỉ đòi mỗi miền ≥ 1;
-// vẫn không được → n ứng viên bất kỳ. `random` truyền vào (ctx.random) để test cố định được.
+// vẫn không được → n ứng viên bất kỳ; còn thiếu nữa → cho cả tỉnh kề start (không bao giờ là start). `random` truyền vào (ctx.random) để test cố định được.
 export function placeKeys(start, n, eligible, { provinces, adjacency, random }) {
   const near = adjacency.get(start)
-  const pool = eligible.filter(id => id !== start && !near.has(id))
+  const far = eligible.filter(id => id !== start && !near.has(id))
+  let pool = far
   const pick = () => {
     const a = [...pool]
     for (let i = a.length - 1; i > 0; i--) {
@@ -28,6 +29,8 @@ export function placeKeys(start, n, eligible, { provinces, adjacency, random }) 
       if (keys.length === n && everyRegion(keys) && (!strict || noneAdjacent(keys))) return keys
     }
   }
+  // Vẫn thiếu: cho cả tỉnh kề start vào ứng viên (không bao giờ là chính start)
+  pool = eligible.filter(id => id !== start)
   return pick()
 }
 
@@ -48,6 +51,7 @@ export function createTram(ctx) {
     const eligible = [...content.hints.keys()]
     for (const [teamId, start] of pairs) {
       const keys = placeKeys(start, n, eligible, { provinces, adjacency, random })
+      if (keys.length < n) throw new GameError('tram-content', `Không đủ tỉnh có gợi ý đã duyệt để rải ${n} key — cần duyệt thêm gợi ý`, 409)
       const perm = [...Array(n).keys()]
       for (let i = n - 1; i > 0; i--) {
         const j = Math.floor(random() * (i + 1))
@@ -229,8 +233,15 @@ export function createTram(ctx) {
 
   function specialNext(teamId, by = null) {
     return transaction(db, () => {
-      const { st } = need(teamId, 'special')
-      if (st.special.pending) return publicSpecial(st) // đã có câu chờ: trả lại câu đó
+      const { t, st } = need(teamId, 'special')
+      const p = st.special.pending
+      if (p) {
+        // Câu chờ đã quá hạn (client không tự bỏ qua kịp): xử như hết giờ rồi báo khóa, không trả câu cũ
+        if (now() > p.at + RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs) {
+          return failSpecial(t, st, by, { timedOut: true }) // trả trạng thái khóa (không ném lỗi: ném sẽ hoàn tác việc xử lý)
+        }
+        return publicSpecial(st) // đã có câu chờ: trả lại câu đó
+      }
       lockLeft(st.special.lockedUntil)
       const all = content.periods.get(st.period).questions
       let pool = all.filter(x => !st.special.seen.includes(x.id))
@@ -261,7 +272,7 @@ export function createTram(ctx) {
     db.prepare('UPDATE teams SET answer_ms = answer_ms + ? WHERE id = ?').run(ms, t.id)
     save(t.id, st)
     log(t.id, 'tram-special', null, { id: p.id, correct: false, star: p.star, ...extra }, by)
-    return { correct: false, ...extra, lockedUntil: st.special.lockedUntil, stage: st.stage }
+    return { correct: false, ...extra, star: p.star, penalty: p.star ? RULES.tram.specialPoints : 0, lockedUntil: st.special.lockedUntil, stage: st.stage }
   }
 
   function specialAnswer(teamId, questionId, given, by = null) {
@@ -290,10 +301,10 @@ export function createTram(ctx) {
     })
   }
 
-  function specialSkip(teamId, by = null) {
+  function specialSkip(teamId, questionId, by = null) {
     return transaction(db, () => {
       const { t, st } = need(teamId, 'special')
-      if (!st.special.pending) throw new GameError('no-pending', 'Không có câu hỏi đang chờ', 409)
+      if (!st.special.pending || st.special.pending.id !== questionId) throw new GameError('no-pending', 'Không có câu hỏi đang chờ', 409)
       return failSpecial(t, st, by, { skipped: true })
     })
   }
@@ -324,7 +335,8 @@ export function createTram(ctx) {
       st.finishBonus = finishBonus
       save(teamId, st)
       log(teamId, 'tram-finish', null, { finishBonus, tries: st.puzzle.tries }, by)
-      const open = db.prepare('SELECT tram FROM teams WHERE room_id = ?').all(roomId).some(r => json(r.tram)?.stage !== 'done')
+      // chỉ đếm team có ít nhất một người chơi (team trống không bao giờ về đích)
+      const open = db.prepare('SELECT tram FROM teams WHERE room_id = ? AND EXISTS (SELECT 1 FROM players p WHERE p.team_id = teams.id)').all(roomId).some(r => json(r.tram)?.stage !== 'done')
       if (!open) { // cả phòng về đích: kết thúc như end()
         closeRoom()
       }

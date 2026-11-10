@@ -139,7 +139,7 @@ function resultPanel(tr) {
   }
   return el('section', { class: 'ts-panel warn' },
     el('h3', {}, r.timedOut ? 'Hết giờ' : r.skipped ? 'Đã bỏ qua' : 'Chưa đúng'),
-    el('p', { class: 'explain' }, 'Cả đội nghỉ 30 giây rồi nhận câu khác.'),
+    el('p', { class: 'explain' }, `Cả đội nghỉ 30 giây rồi nhận câu khác.${r.penalty ? ` Sao hy vọng không thành: bị trừ ${r.penalty} điểm.` : ''}`),
     el('p', { class: 'ts-lock', id: 'tsLock' }),
     el('div', { class: 'dialog-actions' }, button('Nhận câu hỏi', 'green', () => { L.result = null; L.v++; sync(true) }, { disabled: lockOf(tr) > now() })))
 }
@@ -258,6 +258,11 @@ function requestQuestion() {
   act(async () => {
     try {
       const q = await api('/api/tram/special', {})
+      if (q.id === undefined) { // câu cũ đã quá hạn: server xử như hết giờ và khóa — chỉ ghi khóa, SSE cập nhật
+        if (state.me?.tram) { state.me.tram.special.pending = null; if (q.lockedUntil) state.me.tram.special.lockedUntil = q.lockedUntil }
+        sync(true)
+        return
+      }
       if (state.me?.tram) state.me.tram.special.pending = q
       sound.click()
       sync(true)
@@ -300,7 +305,8 @@ function afterAnswer(r) {
     L.lockUntil = r.lockedUntil ?? 0
     tr.special.pending = null
     if (r.lockedUntil) tr.special.lockedUntil = r.lockedUntil
-    toast(r.timedOut ? 'Hết giờ — tính là trả lời sai' : 'Chưa đúng — cả đội nghỉ 30 giây', true, r.timedOut ? 'timer' : '')
+    const lost = r.penalty ? ` — bị trừ ${r.penalty} điểm (sao hy vọng)` : ''
+    toast((r.timedOut ? 'Hết giờ — tính là trả lời sai' : r.skipped ? 'Đã bỏ qua — cả đội nghỉ 30 giây' : 'Chưa đúng — cả đội nghỉ 30 giây') + lost, true, r.timedOut ? 'timer' : '')
   }
   if (r.stage && r.stage !== tr.stage) { tr.stage = r.stage; if (r.stage === 'puzzle') tr.puzzle ??= { pieces: [], lockedUntil: null } }
   L.v++
@@ -315,10 +321,12 @@ function skip(auto = false) {
   }
   if (state.busy) return
   L.skipArmedAt = 0
+  const qid = state.me?.tram?.special.pending?.id
+  if (!qid) return
   L.sending = true; L.v++
   act(async () => {
     try {
-      const r = await api('/api/tram/special-skip', {})
+      const r = await api('/api/tram/special-skip', { questionId: qid })
       L.sending = false
       afterAnswer({ ...r, skipped: !auto, timedOut: auto })
     } catch (err) {

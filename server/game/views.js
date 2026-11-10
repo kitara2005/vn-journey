@@ -23,10 +23,11 @@ export function createViews(ctx) {
       const owned = owners.filter(o => o.team_id === t.id).map(o => o.province_id)
       const base = owned.reduce((s, id) => s + provinces.get(id).points, 0)
       const ownedSet = new Set(owned)
-      const doneCollections = collections.filter(c => [...c.members].filter(m => ownedSet.has(m)).length >= c.need)
+      // Phòng Chạy trạm không có bộ sưu tập / xuyên 3 miền
+      const doneCollections = isTram() ? [] : collections.filter(c => [...c.members].filter(m => ownedSet.has(m)).length >= c.need)
       const collectionBonus = doneCollections.reduce((s, c) => s + c.bonus, 0)
       const regions = new Set(owned.map(id => provinces.get(id).region))
-      const crossRegion = regions.size === REGIONS.length ? RULES.crossRegionBonus : 0
+      const crossRegion = !isTram() && regions.size === REGIONS.length ? RULES.crossRegionBonus : 0
       return {
         teamId: t.id, name: t.name, color: t.color, mascot: t.mascot,
         provinces: owned.length, base, bonus: t.bonus_points, collectionBonus, crossRegion,

@@ -184,6 +184,7 @@ export function createOwner(ctx) {
   // Chủ phòng bật/tắt cho chọn chủ đề — áp dụng từ lần tới tỉnh kế tiếp
   function setTopicChoice(on) {
     state() // phòng không còn → lỗi no-room
+    if (isTram()) throw new GameError('tram-no-events', 'Phòng Chạy trạm không có chọn chủ đề', 409)
     db.prepare('UPDATE rooms SET topic_choice = ? WHERE id = ?').run(on ? 1 : 0, roomId)
     return { topicChoice: !!on }
   }
@@ -191,6 +192,7 @@ export function createOwner(ctx) {
   // Chủ phòng bật/tắt đặt cược ("Chắc ăn" / "Liều") — áp dụng từ lần tới tỉnh kế tiếp
   function setBetChoice(on) {
     state()
+    if (isTram()) throw new GameError('tram-no-events', 'Phòng Chạy trạm không có đặt cược', 409)
     db.prepare('UPDATE rooms SET bet_choice = ? WHERE id = ?').run(on ? 1 : 0, roomId)
     return { betChoice: !!on }
   }

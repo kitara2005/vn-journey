@@ -7,7 +7,7 @@ import { loadTramContent } from '../server/game/tram-content.js'
 import { tramFixture, tramFixtureWith } from './fixtures/tram-content.js'
 import { setupGame, createCore, memoryDb, placeTeam, setTram, getTram, correctAnswer, wrongAnswer, seededRandom, startNow } from './helpers.js'
 import { placeKeys } from '../server/game/tram.js'
-import { GameError, byRank } from '../server/game/rules.js'
+import { GameError, byRank, RULES } from '../server/game/rules.js'
 
 test('loadTramContent chỉ lấy mục reviewed', () => {
   const dir = mkdtempSync(join(tmpdir(), 'tram-'))
@@ -498,8 +498,8 @@ test('special: sai -> khóa 30 giây, không lộ đáp án; specialNext khi kh�
 test('special: skip = sai; hết giờ = sai; sao: x2 khi đúng, -500 khi sai', () => {
   const g = specialAt()
   const [t, u] = g.teams.map(x => x.id)
-  g.game.specialNext(t)
-  assert.equal(g.game.specialSkip(t).lockedUntil - g.now(), 30_000)
+  const pubT = g.game.specialNext(t)
+  assert.equal(g.game.specialSkip(t, pubT.id).lockedUntil - g.now(), 30_000)
   g.game.specialNext(u)
   g.now.advance(48_000)
   const pub = getTram(g.db, u).special.pending
@@ -554,7 +554,7 @@ test('special: tạm dừng giữa câu -> câu còn đủ giờ như trước k
   // khóa dời theo
   const u = g.teams[1].id
   const p2 = g.game.specialNext(u)
-  g.game.specialSkip(u)
+  g.game.specialSkip(u, p2.id)
   g.game.pause()
   g.now.advance(60_000)
   g.game.resume()
@@ -562,13 +562,15 @@ test('special: tạm dừng giữa câu -> câu còn đủ giờ như trước k
   assert.ok(p2)
 })
 
+const addPlayer = (g, teamId) => g.db.prepare("INSERT INTO players (room_id, team_id, name, name_key, home, created_at) VALUES (?, ?, 'x', ?, 'ha-noi', 0)").run(g.room.roomId, teamId, `x${teamId}`)
+
 function puzzleAt(opts = {}) {
   const g = specialAt(opts)
   for (const t of g.teams) {
     const cur = getTram(g.db, t.id)
     setTram(g.db, t.id, { stage: 'puzzle', puzzle: { ...cur.puzzle, display: [2, 0, 4, 1, 3] } })
   }
-  // thứ tự đúng theo vị trí hiện: vị trí của mảnh i
+  for (const t of g.teams) addPlayer(g, t.id) // tự kết thúc chỉ đếm team có người chơi
   g.solve = t => {
     const st = getTram(g.db, t)
     const shown = puzzleDisplay(st)
@@ -758,4 +760,92 @@ test('tram: teamView / ownerView không lỗi khi chưa bắt đầu và sau res
   assert.ok(g.game.teamView(t).tram)
   g.game.reset()
   check()
+})
+
+// ---------- Sửa theo review cuối ----------
+test('tram: không có bộ sưu tập / xuyên 3 miền', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  g.db.exec('DELETE FROM stamps')
+  const ins = g.db.prepare('INSERT INTO stamps (room_id, team_id, province_id, first, question_id, at) VALUES (?, ?, ?, 0, NULL, 0)')
+  for (const p of g.core.provinces.values()) ins.run(g.room.roomId, t, p.id) // đủ mọi tỉnh: mọi miền + mọi bộ sưu tập
+  const s = scoreOf(g, t)
+  assert.equal(s.collectionBonus, 0)
+  assert.equal(s.crossRegion, 0)
+  assert.deepEqual(s.collections, [])
+  assert.equal(s.total, s.base + s.bonus)
+})
+
+test('tram: không bật được cược / chọn chủ đề (owner + sysadmin)', () => {
+  const g = setupGame({ mode: 'tram', teamCount: 2 })
+  for (const f of [() => g.game.setTopicChoice(true), () => g.game.setBetChoice(true)]) {
+    assert.throws(f, e => e instanceof GameError && e.code === 'tram-no-events' && e.status === 409)
+  }
+  assert.equal(g.db.prepare('SELECT bet_choice, topic_choice FROM rooms WHERE id = ?').get(g.room.roomId).bet_choice, 0)
+})
+
+test('placeKeys: hết ứng viên xa start vẫn đủ n, nhưng không bao giờ là start', () => {
+  const { core } = setupGame({ start: false })
+  const { provinces, adjacency } = core
+  const start = 'ha-noi'
+  const near = [...adjacency.get(start)]
+  const eligible = [start, ...near.slice(0, 4), [...provinces.keys()].find(id => id !== start && !adjacency.get(start).has(id))]
+  const keys = placeKeys(start, 5, eligible, { provinces, adjacency, random: seededRandom(3) })
+  assert.equal(keys.length, 5)
+  assert.ok(!keys.includes(start))
+})
+
+test('start() phòng tram: không đủ tỉnh gợi ý đã duyệt -> báo lỗi rõ, không bắt đầu', () => {
+  const content = tramFixtureWith({ hintProvinces: [...tramFixture.hints.keys()].slice(0, 8) })
+  const g = setupGame({ mode: 'tram', teamCount: 2, start: false, tramContent: content })
+  for (const k of [...content.hints.keys()].slice(2)) content.hints.delete(k) // còn 2 tỉnh
+  assert.throws(() => g.game.start(), e => e instanceof GameError && e.code === 'tram-content')
+  assert.equal(g.db.prepare('SELECT status FROM rooms WHERE id = ?').get(g.room.roomId).status, 'waiting')
+})
+
+test('loadTramContent: tỉnh chỉ có gợi ý mức 2 đã duyệt bị bỏ; có mức 1 thì giữ cả mức 2', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tram-'))
+  writeFileSync(join(dir, 'periods.json'), JSON.stringify({ periods: [] }))
+  writeFileSync(join(dir, 'key-hints.json'), JSON.stringify({ hints: {
+    A: [{ level: 1, text: 't', reviewed: false }, { level: 2, text: 'u', reviewed: true }],
+    B: [{ level: 1, text: 't', reviewed: true }, { level: 2, text: 'u', reviewed: true }],
+  } }))
+  const c = loadTramContent(dir)
+  assert.ok(!c.hints.has('A'))
+  assert.equal(c.hints.get('B').length, 2)
+})
+
+test('specialNext: câu pending quá hạn -> xử lý như hết giờ (khóa 30 giây, sao trừ 500), không trả câu cũ', () => {
+  const g = specialAt()
+  const t = g.teams[0].id
+  g.game.armStar(t, true)
+  const pub = g.game.specialNext(t)
+  assert.equal(pub.star, true)
+  const before = g.bonus(t)
+  g.now.advance(RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs + 1000)
+  const r = g.game.specialNext(t)
+  assert.equal(r.id, undefined) // không trả câu cũ
+  assert.equal(r.timedOut, true)
+  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(g.bonus(t), before - 500)
+  const st = getTram(g.db, t)
+  assert.equal(st.special.pending, null)
+  assert.ok(st.special.lockedUntil > g.now())
+})
+
+test('specialSkip: questionId không khớp câu đang chờ -> no-pending', () => {
+  const g = specialAt()
+  const t = g.teams[0].id
+  const pub = g.game.specialNext(t)
+  assert.throws(() => g.game.specialSkip(t, 'khac'), e => e instanceof GameError && e.code === 'no-pending')
+  assert.ok(getTram(g.db, t).special.pending)
+  assert.equal(g.game.specialSkip(t, pub.id).skipped, true)
+})
+
+test('tram: team không có người chơi không chặn tự kết thúc khi mọi team có người đã về đích', () => {
+  const g = puzzleAt()
+  const [a, b] = g.teams
+  g.db.prepare('DELETE FROM players WHERE team_id = ?').run(b.id)
+  g.game.submitPuzzle(a.id, g.solve(a.id))
+  assert.equal(g.game.state().status, 'ended')
 })

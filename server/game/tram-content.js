@@ -17,7 +17,7 @@ export function loadTramContent(dir = join(ROOT, 'data')) {
   const hints = new Map()
   for (const [province, list] of Object.entries(read('key-hints.json').hints ?? {})) {
     const ok = (list ?? []).filter(h => h.reviewed === true)
-    if (ok.length) hints.set(province, ok)
+    if (ok.some(h => h.level === 1)) hints.set(province, ok) // cần mức 1: giveHint / luật cứu chỉ bắt đầu từ mức 1
   }
   return { periods, hints }
 }
