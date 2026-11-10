@@ -422,6 +422,10 @@ export function createApp({ db, config, now = Date.now, random = Math.random }) 
     },
     'POST /api/skip': { auth: ['player'], change: true, run: ({ session }) => roomOf(session).skip(session.team_id, session.player_name) },
     'POST /api/tram/star': { auth: ['player'], change: true, run: ({ session, body }) => roomOf(session).armStar(session.team_id, !!body.on, session.player_name) },
+    'POST /api/tram/special': { auth: ['player'], change: true, run: ({ session }) => roomOf(session).specialNext(session.team_id, session.player_name) },
+    'POST /api/tram/special-answer': { auth: ['player'], change: true, run: ({ session, body }) => roomOf(session).specialAnswer(session.team_id, body.questionId, body.answer, session.player_name) },
+    'POST /api/tram/special-skip': { auth: ['player'], change: true, run: ({ session }) => roomOf(session).specialSkip(session.team_id, session.player_name) },
+    'POST /api/tram/puzzle': { auth: ['player'], change: true, run: ({ session, body }) => roomOf(session).submitPuzzle(session.team_id, body.order, session.player_name) },
     'POST /api/retreat': { auth: ['player'], change: true, run: ({ session }) => roomOf(session).retreat(session.team_id, session.player_name) },
     'POST /api/answer': {
       auth: ['player'], change: true,

@@ -419,3 +419,182 @@ test('tram: phòng tram không bao giờ phát can-tho-02/03; phòng team vẫn 
   }
   assert.ok(seenTeam.has('can-tho-02') || seenTeam.has('can-tho-03'))
 })
+
+// ---------- Task 7: map đặc biệt, câu ghép mảnh ----------
+import { puzzleDisplay } from '../server/game/tram.js'
+import { timePenaltyOf } from '../server/game/rules.js'
+
+// Team đã mở map (stage 'special') ở phòng tram
+function specialAt(opts = {}) {
+  const g = tramAt('hue', 2, opts)
+  for (const t of g.teams) setTram(g.db, t.id, { stage: 'special', openedAt: g.now() })
+  g.qOf = (t, id) => tramFixture.periods.get(getTram(g.db, t).period).questions.find(x => x.id === id)
+  g.right = (t, pub) => pub.options.indexOf(g.qOf(t, pub.id).options[g.qOf(t, pub.id).answer])
+  g.wrong = (t, pub) => (g.right(t, pub) + 1) % 4
+  return g
+}
+
+test('timePenaltyOf: hàm thuần, khớp luật siege 20-45 giây', () => {
+  assert.equal(timePenaltyOf(500, 'siege', 20_000), 0)
+  assert.equal(timePenaltyOf(500, 'siege', 32_500), 250)
+  assert.equal(timePenaltyOf(500, 'siege', 99_000), 500)
+  assert.equal(timePenaltyOf(500, 'siege', 35_000, 15_000), 0)
+})
+
+test('puzzleDisplay: hoán vị cố định, không bao giờ là thứ tự đúng', () => {
+  for (let n = 2; n <= 7; n++) {
+    for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
+      const d = puzzleDisplay(id, 'van-lang', n)
+      assert.deepEqual([...d].sort((x, y) => x - y), [...Array(n).keys()])
+      assert.ok(d.some((v, i) => v !== i))
+      assert.deepEqual(d, puzzleDisplay(id, 'van-lang', n))
+    }
+  }
+})
+
+test('special: 3 câu đúng trong 20 giây đầu -> +1500, stage puzzle; câu ở giây 32,5 -> +250', () => {
+  const g = specialAt()
+  const t = g.teams[0].id
+  const before = g.bonus(t)
+  for (let i = 0; i < 3; i++) {
+    const pub = g.game.specialNext(t)
+    assert.equal(pub.of, 3)
+    g.now.advance(10_000)
+    const r = g.game.specialAnswer(t, pub.id, g.right(t, pub))
+    assert.equal(r.correct, true)
+    assert.equal(r.points, 500)
+    assert.ok(r.correctAnswer && r.explanation)
+  }
+  assert.equal(g.bonus(t) - before, 1500)
+  assert.equal(getTram(g.db, t).stage, 'puzzle')
+  const u = g.teams[1].id
+  const pub = g.game.specialNext(u)
+  g.now.advance(32_500)
+  assert.equal(g.game.specialAnswer(u, pub.id, g.right(u, pub)).points, 250)
+})
+
+test('special: sai -> khóa 30 giây, không lộ đáp án; specialNext khi khóa báo locked; sau khóa ra câu khác', () => {
+  const g = specialAt()
+  const t = g.teams[0].id
+  const pub = g.game.specialNext(t)
+  const r = g.game.specialAnswer(t, pub.id, g.wrong(t, pub))
+  assert.equal(r.correct, false)
+  assert.equal(r.correctAnswer, undefined)
+  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.throws(() => g.game.specialNext(t), e => e.code === 'locked')
+  g.now.advance(30_001)
+  const next = g.game.specialNext(t)
+  assert.notEqual(next.id, pub.id)
+  assert.equal(g.game.specialNext(t).id, next.id) // idempotent
+})
+
+test('special: skip = sai; hết giờ = sai; sao: x2 khi đúng, -500 khi sai', () => {
+  const g = specialAt()
+  const [t, u] = g.teams.map(x => x.id)
+  g.game.specialNext(t)
+  assert.equal(g.game.specialSkip(t).lockedUntil - g.now(), 30_000)
+  g.game.specialNext(u)
+  g.now.advance(48_000)
+  const pub = getTram(g.db, u).special.pending
+  assert.equal(g.game.specialAnswer(u, pub.id, 0).timedOut, true)
+  // sao
+  const h = specialAt()
+  const s = h.teams[0].id
+  h.game.armStar(s, true)
+  const p1 = h.game.specialNext(s)
+  assert.equal(p1.star, true)
+  assert.equal(getTram(h.db, s).star, 'used')
+  assert.equal(h.game.specialAnswer(s, p1.id, h.right(s, p1)).points, 1000)
+  const b = h.bonus(s)
+  const p2 = h.game.specialNext(s)
+  assert.equal(p2.star, false)
+  const k = specialAt()
+  const w = k.teams[0].id
+  k.game.armStar(w, true)
+  const p3 = k.game.specialNext(w)
+  const b3 = k.bonus(w)
+  k.game.specialAnswer(w, p3.id, k.wrong(w, p3))
+  assert.equal(k.bonus(w) - b3, -500)
+})
+
+test('special: hai người trả lời cùng câu -> lần 2 no-pending, điểm cộng một lần', () => {
+  const g = specialAt()
+  const t = g.teams[0].id
+  const pub = g.game.specialNext(t)
+  const before = g.bonus(t)
+  g.game.specialAnswer(t, pub.id, g.right(t, pub), 'An')
+  assert.throws(() => g.game.specialAnswer(t, pub.id, g.right(t, pub), 'Binh'), e => e.code === 'no-pending')
+  assert.equal(g.bonus(t) - before, 500)
+})
+
+test('special: sai stage -> wrong-stage; phòng không tram -> not-tram', () => {
+  const g = tramAt('hue')
+  assert.throws(() => g.game.specialNext(g.teams[0].id), e => e.code === 'wrong-stage')
+  const h = setupGame({ teamCount: 2 })
+  assert.throws(() => h.game.specialNext(h.teams[0].id), e => e.code === 'not-tram')
+})
+
+test('special: tạm dừng giữa câu -> câu còn đủ giờ như trước khi dừng', () => {
+  const g = specialAt()
+  const t = g.teams[0].id
+  const pub = g.game.specialNext(t)
+  g.now.advance(10_000)
+  g.game.pause()
+  g.now.advance(120_000)
+  g.game.resume()
+  g.now.advance(5_000) // tổng đã tính 15 giây < 20
+  assert.equal(g.game.specialAnswer(t, pub.id, g.right(t, pub)).points, 500)
+  // khóa dời theo
+  const u = g.teams[1].id
+  const p2 = g.game.specialNext(u)
+  g.game.specialSkip(u)
+  g.game.pause()
+  g.now.advance(60_000)
+  g.game.resume()
+  assert.equal(getTram(g.db, u).special.lockedUntil - g.now(), 30_000)
+  assert.ok(p2)
+})
+
+function puzzleAt(opts = {}) {
+  const g = specialAt(opts)
+  for (const t of g.teams) setTram(g.db, t.id, { stage: 'puzzle' })
+  // thứ tự đúng theo vị trí hiện: vị trí của mảnh i
+  g.solve = t => {
+    const st = getTram(g.db, t)
+    const shown = puzzleDisplay(t, st.period, st.need)
+    return [...Array(st.need).keys()].map(i => shown.indexOf(i))
+  }
+  return g
+}
+
+test('puzzle: sai -> khóa 30 giây; đúng ở phút 20 trận 45 phút -> +1000 + 25x30; already-done; cả phòng về đích -> ended', () => {
+  const g = puzzleAt({ durationMin: 45 })
+  const [t, u] = g.teams.map(x => x.id)
+  const bad = g.solve(t).reverse()
+  const r = g.game.submitPuzzle(t, bad)
+  assert.equal(r.correct, false)
+  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(getTram(g.db, t).puzzle.tries, 1)
+  assert.throws(() => g.game.submitPuzzle(t, g.solve(t)), e => e.code === 'locked')
+  assert.throws(() => g.game.submitPuzzle(u, [0, 0, 0, 0, 0]), e => e.code === 'bad-order')
+  g.now.advance(20 * 60_000 - 0)
+  const before = g.bonus(t)
+  const ok = g.game.submitPuzzle(t, g.solve(t))
+  assert.equal(ok.correct, true)
+  const mins = Math.floor((g.db.prepare('SELECT ends_at e FROM rooms').get().e - g.now()) / 60_000)
+  assert.equal(g.bonus(t) - before, 1000 + mins * 30)
+  assert.equal(getTram(g.db, t).stage, 'done')
+  assert.throws(() => g.game.submitPuzzle(t, g.solve(t)), e => e.code === 'already-done')
+  assert.notEqual(g.game.state().status, 'ended')
+  g.game.submitPuzzle(u, g.solve(u))
+  assert.equal(g.game.state().status, 'ended')
+})
+
+test('puzzle: phút 20 của trận 45 phút -> đúng +1000 + 25x30', () => {
+  const g = puzzleAt({ durationMin: 45 })
+  const t = g.teams[0].id
+  g.now.advance(20 * 60_000)
+  const before = g.bonus(t)
+  g.game.submitPuzzle(t, g.solve(t))
+  assert.equal(g.bonus(t) - before, 1000 + 25 * 30)
+})

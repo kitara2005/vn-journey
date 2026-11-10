@@ -1,7 +1,9 @@
 // Chế độ "Chạy trạm": trạng thái hành trình của từng team (teams.tram, JSON chỉ server đọc),
 // bắt đầu trận (thời kỳ, rải key, mảnh ghép). Các luật gợi ý / cứu / câu hỏi / ghép thêm ở các task sau.
 
-import { REGIONS, RULES, GameError } from './rules.js'
+import { createHash } from 'node:crypto'
+import { transaction } from '../db.js'
+import { REGIONS, RULES, GameError, timePenaltyOf } from './rules.js'
 
 const TRIES = 200
 
@@ -30,8 +32,27 @@ export function placeKeys(start, n, eligible, { provinces, adjacency, random }) 
   return pick()
 }
 
+// Thứ tự mảnh ghép hiện cho team: hoán vị cố định của 0..n-1 theo hash(teamId + periodId), luôn khác thứ tự đúng (n > 1)
+export function puzzleDisplay(teamId, periodId, n) {
+  const h = createHash('sha256').update(`${teamId}:${periodId}`).digest()
+  let seed = h.readUInt32BE(0)
+  const rnd = () => {
+    seed = (seed + 0x6D2B79F5) | 0
+    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
+  }
+  const a = Array.from({ length: n }, (_, i) => i)
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  if (n > 1 && a.every((v, i) => v === i)) a.push(a.shift()) // trùng thứ tự đúng: xoay một nấc
+  return a
+}
+
 export function createTram(ctx) {
-  const { db, q, now, random, json, provinces, adjacency, roomId, log, tram: content, requireRunning, requireTeam, isTram } = ctx
+  const { db, q, now, random, json, provinces, adjacency, roomId, log, tram: content, requireRunning, requireTeam, isTram, recordBoard, scoreOf } = ctx
 
   const state = t => json(t.tram)
   const save = (teamId, st) => db.prepare('UPDATE teams SET tram = ? WHERE id = ?').run(JSON.stringify(st), teamId)
@@ -61,9 +82,15 @@ export function createTram(ctx) {
     }
   }
 
-  // Tạm dừng xong: dời các mốc thời gian trong teams.tram thêm gapMs (Task 7 thêm các bộ đếm giờ)
+  // Tạm dừng xong (gọi trong transaction): dời các mốc giờ trong teams.tram thêm gapMs.
+  // Câu map đang chờ luôn dời (giờ trả lời không tính lúc dừng, như pending_at của câu tỉnh); các mốc khóa chỉ dời khi còn sau pausedAt
   function shift(gapMs, pausedAt) {
-    // chưa có mốc giờ nào cần dời
+    for (const row of db.prepare('SELECT id, tram FROM teams WHERE room_id = ? AND tram IS NOT NULL').all(roomId)) {
+      const st = json(row.tram)
+      if (st.special.pending) st.special.pending.at += gapMs
+      for (const o of [st.special, st.puzzle]) if (o.lockedUntil && o.lockedUntil > pausedAt) o.lockedUntil += gapMs
+      save(row.id, st)
+    }
   }
 
   // Khoảng cách BFS (số bước) từ `from` tới mọi tỉnh
@@ -180,5 +207,128 @@ export function createTram(ctx) {
     return true
   }
 
-  return { setupTeams, state, save, shift, onCorrect, tick, armStar, consumeStar, placeKeys: (start, n, eligible) => placeKeys(start, n, eligible, { provinces, adjacency, random }) }
+  // ---------- Map đặc biệt: 3 câu thời kỳ, rồi câu ghép mảnh ----------
+  const lockLeft = until => { if (until && until > now()) throw new GameError('locked', 'Team đang nghỉ chân, chờ hết thời gian', 423) }
+
+  // Đọc trạng thái tram của team đang chơi (phòng chạy, đúng stage)
+  function need(teamId, stage) {
+    requireRunning()
+    const t = requireTeam(teamId)
+    const st = isTram() ? state(t) : null
+    if (!st) throw new GameError('not-tram', 'Chỉ có trong phòng Chạy trạm', 409)
+    if (st.stage === 'done' && stage === 'puzzle') throw new GameError('already-done', 'Team đã về đích rồi', 409)
+    if (st.stage !== stage) throw new GameError('wrong-stage', 'Chưa tới bước này', 409)
+    return { t, st }
+  }
+
+  function publicSpecial(st) {
+    const p = st.special.pending
+    const qn = content.periods.get(st.period).questions.find(x => x.id === p.id)
+    return { id: p.id, content: qn.content, options: p.order.map(i => qn.options[i]), at: p.at, star: p.star, done: st.special.done, of: RULES.tram.specialCount }
+  }
+
+  function specialNext(teamId, by = null) {
+    return transaction(db, () => {
+      const { st } = need(teamId, 'special')
+      if (st.special.pending) return publicSpecial(st) // đã có câu chờ: trả lại câu đó
+      lockLeft(st.special.lockedUntil)
+      const all = content.periods.get(st.period).questions
+      let pool = all.filter(x => !st.special.seen.includes(x.id))
+      if (!pool.length) { st.special.seen = []; pool = all } // hết câu chưa gặp: cho lặp
+      const qn = pool[Math.floor(random() * pool.length)]
+      const order = Array.from({ length: qn.options.length }, (_, i) => i)
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1))
+        ;[order[i], order[j]] = [order[j], order[i]]
+      }
+      const star = st.star === 'armed' // sao dùng ngay lúc phát câu
+      if (star) st.star = 'used'
+      st.special.seen.push(qn.id)
+      st.special.pending = { id: qn.id, order, at: now() + ctx.questionLeadMs, star }
+      save(teamId, st)
+      log(teamId, 'tram-special', null, { issued: qn.id }, by)
+      return publicSpecial(st)
+    })
+  }
+
+  // Sai / hết giờ / bỏ qua: khóa 30 giây, câu có sao thì trừ 500. Gọi trong transaction
+  function failSpecial(t, st, by, extra = {}) {
+    const p = st.special.pending
+    st.special.pending = null
+    st.special.lockedUntil = now() + RULES.tram.lockMs
+    if (p.star) db.prepare('UPDATE teams SET bonus_points = bonus_points - ? WHERE id = ?').run(RULES.tram.specialPoints, t.id)
+    const ms = Math.max(0, Math.min(now() - p.at, RULES.answerLimitMs.siege))
+    db.prepare('UPDATE teams SET answer_ms = answer_ms + ? WHERE id = ?').run(ms, t.id)
+    save(t.id, st)
+    log(t.id, 'tram-special', null, { id: p.id, correct: false, star: p.star, ...extra }, by)
+    return { correct: false, ...extra, lockedUntil: st.special.lockedUntil, stage: st.stage }
+  }
+
+  function specialAnswer(teamId, questionId, given, by = null) {
+    return transaction(db, () => {
+      const { t, st } = need(teamId, 'special')
+      const p = st.special.pending
+      if (!p || p.id !== questionId) throw new GameError('no-pending', 'Không có câu hỏi đang chờ', 409)
+      const qn = content.periods.get(st.period).questions.find(x => x.id === p.id)
+      if (now() > p.at + RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs) return failSpecial(t, st, by, { timedOut: true })
+      if (!Number.isInteger(given) || given < 0 || given >= p.order.length) throw new GameError('bad-answer', 'Đáp án không hợp lệ')
+      if (p.order[given] !== qn.answer) return failSpecial(t, st, by)
+      const elapsed = Math.max(0, now() - p.at)
+      const base = RULES.tram.specialPoints - timePenaltyOf(RULES.tram.specialPoints, 'siege', elapsed)
+      const points = p.star ? base * 2 : base
+      db.prepare('UPDATE teams SET bonus_points = bonus_points + ?, answer_ms = answer_ms + ? WHERE id = ?')
+        .run(points, Math.min(elapsed, RULES.answerLimitMs.siege), teamId)
+      st.special.pending = null
+      st.special.done += 1
+      if (st.special.done >= RULES.tram.specialCount) st.stage = 'puzzle'
+      save(teamId, st)
+      log(teamId, 'tram-special', null, { id: p.id, correct: true, points, star: p.star }, by)
+      return { correct: true, points, correctAnswer: qn.options[qn.answer], explanation: qn.explanation, stage: st.stage }
+    })
+  }
+
+  function specialSkip(teamId, by = null) {
+    return transaction(db, () => {
+      const { t, st } = need(teamId, 'special')
+      if (!st.special.pending) throw new GameError('no-pending', 'Không có câu hỏi đang chờ', 409)
+      return failSpecial(t, st, by, { skipped: true })
+    })
+  }
+
+  // order = vị trí trong danh sách mảnh hiện cho client (puzzleDisplay), theo thứ tự team xếp. Đúng khi ánh xạ ra 0..n-1
+  function submitPuzzle(teamId, order, by = null) {
+    return transaction(db, () => {
+      const { st } = need(teamId, 'puzzle')
+      lockLeft(st.puzzle.lockedUntil)
+      const n = st.need
+      if (!Array.isArray(order) || order.length !== n || new Set(order).size !== n || !order.every(v => Number.isInteger(v) && v >= 0 && v < n)) {
+        throw new GameError('bad-order', 'Thứ tự mảnh ghép không hợp lệ')
+      }
+      const shown = puzzleDisplay(teamId, st.period, n)
+      if (!order.every((pos, i) => shown[pos] === i)) {
+        st.puzzle.lockedUntil = now() + RULES.tram.lockMs
+        st.puzzle.tries += 1
+        save(teamId, st)
+        log(teamId, 'tram-special', null, { puzzle: false, tries: st.puzzle.tries }, by)
+        return { correct: false, lockedUntil: st.puzzle.lockedUntil }
+      }
+      const room = q.room.get(roomId)
+      const finishBonus = RULES.tram.puzzlePoints + Math.floor(Math.max(0, room.ends_at - now()) / 60_000) * RULES.tram.finishPerMin
+      db.prepare('UPDATE teams SET bonus_points = bonus_points + ? WHERE id = ?').run(finishBonus, teamId)
+      st.stage = 'done'
+      st.finishedAt = now()
+      st.finishBonus = finishBonus
+      save(teamId, st)
+      log(teamId, 'tram-finish', null, { finishBonus, tries: st.puzzle.tries }, by)
+      const open = db.prepare('SELECT tram FROM teams WHERE room_id = ?').all(roomId).some(r => json(r.tram)?.stage !== 'done')
+      if (!open) { // cả phòng về đích: kết thúc như end()
+        db.prepare("UPDATE rooms SET status = 'ended', ends_at = ?, shared_question = NULL WHERE id = ?").run(now(), roomId)
+        log(null, 'end')
+        recordBoard()
+      }
+      return { correct: true, finishBonus, total: scoreOf(teamId)?.total }
+    })
+  }
+
+  return { setupTeams, state, save, shift, specialNext, specialAnswer, specialSkip, submitPuzzle, onCorrect, tick, armStar, consumeStar, placeKeys: (start, n, eligible) => placeKeys(start, n, eligible, { provinces, adjacency, random }) }
 }

@@ -78,7 +78,7 @@ export function createRoomScope(ctx, roomId) {
     }
   }
 
-  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps }
+  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps, recordBoard, scoreOf: id => scores().find(s => s.teamId === id) }
   const tram = createTram(rctx)
   const questions = createQuestions({ ...rctx, tram })
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions, tram })
@@ -101,6 +101,10 @@ export function createRoomScope(ctx, roomId) {
     kickPlayer, renamePlayer, leave, releaseHost, start, pause, resume, end, reset, triggerEvent, adjustScore, setTopicChoice, setBetChoice,
     startShared, voteShared, settleShared, spawnSolo, isSolo, isTram, usesStamps,
     armStar: (teamId, on, by) => tram.armStar(teamId, on, by),
+    specialNext: (teamId, by) => tram.specialNext(teamId, by),
+    specialAnswer: (teamId, questionId, given, by) => tram.specialAnswer(teamId, questionId, given, by),
+    specialSkip: (teamId, by) => tram.specialSkip(teamId, by),
+    submitPuzzle: (teamId, order, by) => tram.submitPuzzle(teamId, order, by),
     questionStats: () => questionStats(roomId),
   }
 }

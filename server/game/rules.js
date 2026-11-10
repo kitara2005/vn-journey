@@ -144,3 +144,10 @@ export function normalizeText(s) {
 export const cleanName = (s, max) => [...String(s ?? '')
   .replace(/[\u0000-\u001f\u007f-\u009f­؜​-‏‪-‮⁠-⁯﻿]/g, '')
   .replace(/\s+/g, ' ').trim()].slice(0, max).join('').trim()
+
+// Điểm bị trừ theo thời gian trả lời (hàm thuần). extraMs: thẻ Thêm giờ — dời cả khoảng được đủ điểm lẫn hạn chót
+export function timePenaltyOf(points, difficulty, elapsedMs, extraMs = 0) {
+  const free = RULES.answerFreeMs[difficulty] + extraMs, limit = RULES.answerLimitMs[difficulty] + extraMs
+  if (elapsedMs <= free) return 0
+  return Math.round(points * Math.min(1, (elapsedMs - free) / (limit - free)))
+}
