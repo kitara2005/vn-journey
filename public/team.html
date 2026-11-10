@@ -365,7 +365,11 @@
         <div class="btn-row neighbors" id="neighbors"></div>
       </div>
 
-      <div class="card cards" data-tab="cards">
+      <!-- Phòng Chạy trạm (team/tram.js): khay key + Ngôi sao hy vọng, sổ gợi ý -->
+      <div class="card tram-tray" id="tramTray" data-tab="map hint" hidden></div>
+      <div class="card tram-book" id="tramBook" data-tab="hint" hidden></div>
+
+      <div class="card cards" id="cardsCard" data-tab="cards">
         <h2>Thẻ bài <span class="muted">· tối đa 3</span></h2>
         <div class="btn-row" id="cards"></div>
         <p class="muted" id="cardsEmpty">Cắm cờ ở thành phố trực thuộc TW để nhận thẻ.</p>
@@ -391,7 +395,8 @@
   <!-- Điện thoại: thanh tab dưới chọn thẻ hiện trong ngăn dưới bản đồ (team/menu.js) -->
   <nav class="tabbar" id="tabbar" aria-label="Bảng thông tin">
     <button type="button" data-tab="map" aria-pressed="true"><span data-icon="map"></span>Bản đồ</button>
-    <button type="button" data-tab="cards" aria-pressed="false"><span class="badge" id="cardBadge" hidden></span><span data-icon="card"></span>Thẻ bài</button>
+    <button type="button" data-tab="hint" id="hintTab" aria-pressed="false" hidden><span data-icon="scroll"></span>Gợi ý</button>
+    <button type="button" data-tab="cards" id="cardsTab" aria-pressed="false"><span class="badge" id="cardBadge" hidden></span><span data-icon="card"></span>Thẻ bài</button>
     <button type="button" data-tab="team" aria-pressed="false"><span data-icon="flag"></span><span id="teamTabLabel">Đội</span></button>
     <button type="button" data-tab="log" aria-pressed="false"><span data-icon="rumor"></span>Nhật ký</button>
   </nav>

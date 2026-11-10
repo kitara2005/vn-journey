@@ -70,6 +70,12 @@ function logText(e) {
     case 'time-penalty': return [`Trả lời chậm ở ${p}: −${e.penalty} điểm`, 'bad']
     case 'card': return [`${who}dùng thẻ ${CARD_INFO[e.kind]?.name ?? ''}${p ? ` (${p})` : ''}`]
     case 'streak': return [`Chuỗi ${e.n} câu đúng! ${e.card ? `Nhận thẻ ${CARD_INFO[e.card].name}` : `+${e.bonus} điểm (khay thẻ đã đầy)`}`, 'good']
+    case 'tram-key': return [`${who}nhặt được key ${e.n}/${e.of} ở ${p}`, 'good']
+    case 'tram-hint': return [e.level === 2 ? 'Có gợi ý thêm mới trong sổ gợi ý' : 'Có gợi ý mới trong sổ gợi ý', 'good']
+    case 'tram-open': return [`Đủ key, map đặc biệt mở${e.free ? `: +${e.free} điểm` : ''}`, 'good']
+    case 'tram-star': return e.on != null ? [`${who}${e.on ? 'bật' : 'tắt'} Ngôi sao hy vọng`]
+      : e.gain ? [`Ngôi sao hy vọng ở ${p}: +${e.gain} điểm`, 'good'] : [`Ngôi sao hy vọng ở ${p}: −${e.lost} điểm`, 'bad']
+    case 'tram-finish': return [`Về đích! +${e.finishBonus} điểm`, 'good']
     case 'lost': return [`${p} đã đổi chủ!`, 'bad']
     default: return [e.action]
   }

@@ -42,3 +42,21 @@ dialog.docked[open]:not(.shake) { animation: dock-in .5s cubic-bezier(.25, 1.25,
 
 /* Camera đang bay: tạm dừng hiệu ứng chạy liên tục để dồn sức cho khung hình (giảm giật) */
 .map.flying :is(.trail, .hop, .swirl, .lantern use, .cloud .bob) { animation-play-state: paused; }
+
+/* Phòng Chạy trạm: khay key, nút Ngôi sao hy vọng, sổ gợi ý mật thư */
+.key-tray { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; padding: 0; list-style: none; }
+.key-tray .slot { display: inline-flex; align-items: center; gap: 4px; min-width: 44px; min-height: 38px; padding: 4px 10px; border: 2px dashed var(--line); border-radius: 12px; color: var(--muted); font-weight: 800; }
+.key-tray .slot.got { border: 2px solid #F5D58A; background: #FFF4D6; color: #7A4A00; animation: slot-pop .4s cubic-bezier(.25, 1.25, .5, 1); }
+.key-tray .slot-empty { margin: 0 auto; font-size: 18px; }
+@keyframes slot-pop { from { transform: scale(.6) rotate(-6deg); opacity: 0; } }
+.btn.star-btn.armed { --fill: #FFF4D6; --bd: var(--orange); color: #7A4A00; box-shadow: 0 0 0 4px rgba(255, 168, 0, .28); }
+.btn.star-btn.used { --fill: #F2F2F2; --bd: var(--line); color: var(--muted); }
+.star-note { font-size: 14px; }
+.hint-list { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; max-height: 40vh; overflow-y: auto; }
+.hint-item { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 2px solid #F5D58A; border-radius: 12px 16px 12px 14px; background: #FFFAEB; }
+.hint-item.extra { border-color: var(--orange); background: #FFF4D6; }
+.hint-item p { margin: 0; font-size: 15px; line-height: 1.4; }
+.hint-tag { display: inline-block; margin-bottom: 2px; padding: 0 8px; border-radius: 999px; background: var(--orange); color: #fff; font-size: 12px; font-weight: 900; }
+.reward.key { color: #B86E00; }
+.reward.hint { color: var(--blue-dark); }
+.card h2 .muted { margin-left: 4px; }

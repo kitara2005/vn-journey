@@ -10,9 +10,10 @@ import { $, button, el } from '/shared/dom.js'
 import { moveTo, reopenPending, retryHere, updateSiegeChoice } from './actions.js'
 import { openCard } from './cards.js'
 import { renderHost } from './host.js'
+import { renderTram, tickTram } from './tram.js'
 import { renderJournal, toast } from './notify.js'
 import { openSiegeBet, updateBetTimer } from './siege-bet.js'
-import { CARD_INFO, canMove, hasPending, hostBtnWhere, isHost, locked, nameOf, now, reachable, running, scoutActive, solo, state, stormRegion } from './state.js'
+import { CARD_INFO, canMove, tram, hasPending, hostBtnWhere, isHost, locked, nameOf, now, reachable, running, scoutActive, solo, state, stormRegion } from './state.js'
 
 function mapView() {
   // Phòng đơn sau khi kết thúc: chỉ tô các tỉnh mình có tem, không còn sương mù
@@ -72,6 +73,7 @@ function stampNotes() {
 // Về quê: tỉnh quê của thành viên team (server chỉ gửi cho chính team)
 const homeNames = id => state.me.members.filter(m => m.home === id).map(m => m.name)
 function homePins() {
+  if (tram()) return [] // phòng tram: không có quê
   const done = new Set(state.me.homes?.done)
   const full = done.size >= (state.me.homes?.max ?? Infinity)
   return [...new Set(state.me.members.map(m => m.home).filter(Boolean))]
@@ -140,7 +142,7 @@ export function renderAll() {
   $('cardsEmpty').textContent = one ? 'Nhận tem ở thành phố trực thuộc TW để nhận thẻ.' : 'Cắm cờ ở thành phố trực thuộc TW để nhận thẻ.'
   // Chuỗi đúng: cứ 3 câu liên tiếp nhận 1 thẻ trợ giúp
   const streak = state.me.streak ?? 0
-  $('streakBox').hidden = !streak
+  $('streakBox').hidden = !streak || tram()
   $('streak').textContent = String(streak)
   $('streakBox').title = `${streak} câu đúng liên tiếp — còn ${3 - (streak % 3)} câu nữa nhận thẻ trợ giúp. Sai, hết giờ hoặc bỏ qua thì về 0`
   $('roomInfo').textContent = `${state.me.room.name} · ${state.me.room.code}`
@@ -149,7 +151,7 @@ export function renderAll() {
     el('li', m.id === state.me.me?.id ? { class: 'self' } : {}, m.name, m.id === state.me.me?.id ? ' (bạn)' : '',
       m.home ? el('span', { class: 'home' }, ` · ${nameOf(m.home)}`) : '')))
   const homes = homePins()
-  $('homeBox').hidden = !homes.length
+  $('homeBox').hidden = !homes.length || tram()
   $('homeN').textContent = String(state.me.homes?.done.length ?? 0)
   $('homeMax').textContent = `/${state.me.homes?.max ?? 3} về quê`
   $('homeBox').title = one ? `Có tem ở tỉnh quê của bạn: +${state.me.homes?.bonus} điểm` : `Cắm cờ ở tỉnh quê của đồng đội: +${state.me.homes?.bonus} điểm, tối đa ${state.me.homes?.max} tỉnh`
@@ -159,6 +161,7 @@ export function renderAll() {
   renderOverlay()
   renderTimers()
   renderHost()
+  renderTram()
 }
 
 export function renderSide() {
@@ -250,6 +253,10 @@ function renderOverlay() {
     : `${state.me.room.name} · ${state.me.members.length} người trong ${state.me.team.name}. Bản đồ sẽ mở khi trận đấu bắt đầu.`]
   else if (s === 'paused') [title, text] = state.me.shared ? ['Câu hỏi chung cả phòng', 'Trận tạm dừng trong lúc cả phòng cùng trả lời'] : ['Tạm dừng', 'Chủ phòng đang tạm dừng trận đấu']
   else if (s === 'ended' && !state.final) [title, text] = ['Hết giờ!', 'Đang tổng kết…']
+  // Phòng tram: đã mở map đặc biệt — màn riêng ở bước sau, tạm báo trên bản đồ
+  else if (s === 'running' && tram() && state.me.tram && state.me.tram.stage !== 'map') [title, text] = state.me.tram.stage === 'done'
+    ? ['Đã về đích', 'Đội bạn đã hoàn thành hành trình.']
+    : ['Đã mở map đặc biệt', 'Đội bạn đã nhặt đủ key. Màn map đặc biệt đang được hoàn thiện.']
   // holdLock: đang diễn cảnh "bị đẩy lui" trên tỉnh — chưa phủ màn khóa lên bản đồ
   else if (locked() && !state.holdLock) [title, text, calm] = ['Nghỉ chân', state.me.lastResult?.repelled
     ? 'Chủ nhà trả lời đúng trước — chờ hết thời gian để chơi tiếp'
@@ -290,6 +297,7 @@ export function renderTimers() {
     $('eventPill').classList.toggle('golden', ev.kind === 'golden')
   }
   if (locked()) $('ovBig').textContent = formatClock(state.me.lockedUntil - t)
+  tickTram()
   updateSiegeChoice() // khung "Tỉnh này đã có chủ": đếm lùi thời gian chờ, hết chờ thì mở nút Công thành
   updateBetTimer()    // khung cược số hiệp thử tài: đếm lùi hạn cược
 
