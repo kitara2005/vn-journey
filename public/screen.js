@@ -327,7 +327,7 @@ async function startReplay() {
   $('eventBtn').hidden = data.mode !== 'solo'
   $('cultureBtn').hidden = data.mode === 'tram' // thống kê văn hóa theo câu tỉnh / tem: không hợp phòng tram
   // Phòng đơn: không tua bản đồ (đông người, tỉnh không thuộc riêng ai) — công bố top 10 luôn
-  // Phòng tram: không có cờ / di chuyển để tua — công bố xếp hạng luôn
+  // Phòng tram: dùng tem (không có cắm cờ / cướp để tua) như phòng đơn — công bố xếp hạng luôn
   if (data.mode === 'solo' || data.mode === 'tram') {
     $('frozen').hidden = true
     return reveal(token)

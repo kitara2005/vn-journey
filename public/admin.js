@@ -242,11 +242,10 @@ function renderButtons() {
   const s = view.status
   // Phòng tram: không có sự kiện MC / câu hỏi chung / chọn chủ đề / cược (server từ chối) — ẩn các khối đó
   const tram = view.room.mode === 'tram'
-  $('adminTabs').querySelector('[data-tab="events"]').hidden = tram
-  document.querySelector('.side [data-tab="events"]').hidden = tram
+  $('adminTabs').querySelector('[data-tab="events"]').textContent = tram ? 'Diễn biến' : 'Sự kiện'
+  $('eventKind').closest('.card').hidden = tram // chỉ ẩn thẻ Sự kiện; thẻ "Diễn biến" (nhật ký) vẫn ở tab này trên điện thoại
   $('topicChoice').closest('label').hidden = tram
   $('betChoice').closest('label').hidden = tram
-  if (tram && $('app').dataset.tab === 'events') showTab('game')
   const buttons = []
   if (s === 'waiting') {
     const players = view.teams.reduce((n, t) => n + t.members.length, 0)
