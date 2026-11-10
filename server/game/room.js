@@ -83,7 +83,7 @@ export function createRoomScope(ctx, roomId) {
   const questions = createQuestions({ ...rctx, tram })
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions, tram })
   const { startShared, voteShared, settleShared, closeShared, sharedPublic } = createShared({ ...rctx, ...questions })
-  const { journal, scores, teamView, screenView, ownerView, replay, news } = createViews({ ...rctx, ...questions, choiceFor, siegeBlock, sharedPublic })
+  const { journal, scores, teamView, screenView, ownerView, replay, news } = createViews({ ...rctx, tramApi: tram, ...questions, choiceFor, siegeBlock, sharedPublic })
   const owner = createOwner({ ...rctx, scores, recordBoard, tram })
   const { spawnSolo } = owner
   const { kickPlayer, renamePlayer, leave, releaseHost, start, pause, end, reset, triggerEvent, adjustScore, setTopicChoice, setBetChoice } = owner

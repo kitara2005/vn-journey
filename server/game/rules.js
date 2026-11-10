@@ -119,7 +119,11 @@ export const EVENT_KINDS = ['festival', 'storm', 'golden', 'rumor']
 export const TEAM_LOG_ACTIONS = ['spawn', 'move', 'retry', 'retreat', 'pushed-back', 'topic', 'capture', 'steal', 'wrong', 'siege-fail', 'siege', 'skip', 'card', 'time-penalty', 'streak', 'speed', 'defend', 'defend-fail', 'held', 'repelled', 'home', 'shared-bonus', 'pioneer', 'progress', 'siege-bet', 'duel-round', 'tram-key', 'tram-hint', 'tram-open', 'tram-rescue', 'tram-star', 'tram-special', 'tram-finish']
 
 // Xếp hạng: điểm cao hơn trước; bằng điểm thì tổng thời gian trả lời ít hơn trước
-export const byRank = (a, b) => b.total - a.total || a.answerMs - b.answerMs
+// Bằng điểm: phòng Chạy trạm xếp team về đích sớm hơn lên trên (finishedAt null/undefined = chưa về, xếp sau); team/solo không có finishedAt nên không đổi
+const finishOrder = x => x.finishedAt ?? Infinity
+export const byRank = (a, b) => b.total - a.total
+  || (finishOrder(a) === finishOrder(b) ? 0 : finishOrder(a) < finishOrder(b) ? -1 : 1)
+  || a.answerMs - b.answerMs
 
 export class GameError extends Error {
   constructor(code, message, status = 400) {

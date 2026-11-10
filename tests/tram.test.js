@@ -7,7 +7,7 @@ import { loadTramContent } from '../server/game/tram-content.js'
 import { tramFixture, tramFixtureWith } from './fixtures/tram-content.js'
 import { setupGame, createCore, memoryDb, placeTeam, setTram, getTram, correctAnswer, wrongAnswer, seededRandom } from './helpers.js'
 import { placeKeys } from '../server/game/tram.js'
-import { GameError } from '../server/game/rules.js'
+import { GameError, byRank } from '../server/game/rules.js'
 
 test('loadTramContent chỉ lấy mục reviewed', () => {
   const dir = mkdtempSync(join(tmpdir(), 'tram-'))
@@ -607,4 +607,138 @@ test('puzzle: phút 20 của trận 45 phút -> đúng +1000 + 25x30', () => {
   const before = g.bonus(t)
   g.game.submitPuzzle(t, g.solve(t))
   assert.equal(g.bonus(t) - before, 1000 + 25 * 30)
+})
+
+// ---------- Điểm, xếp hạng, dữ liệu cho màn hình ----------
+test('teamView.tram: không lộ tỉnh key chưa nhặt, thời kỳ chưa mở, đáp án; mở map thì có period.name', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  const keyIds = ['ca-mau', 'lang-son', 'can-tho', 'dong-nai', 'gia-lai']
+  setTram(g.db, t, { keys: mkKeys(keyIds.map(p => [p])) })
+  const answerAt = to => {
+    const { question } = g.game.move(t, to)
+    g.game.answer(t, question.id, correctAnswer(g.db, t))
+    g.now.advance(60_000)
+  }
+  answerAt('quang-tri')
+  g.game.move(t, 'hue'); answerAt('da-nang')
+  g.game.move(t, 'hue'); g.game.move(t, 'quang-tri'); answerAt('ha-tinh')
+  const st = getTram(g.db, t)
+  assert.equal(st.hints.length, 1)
+  const view = g.game.teamView(t)
+  const text = JSON.stringify(view)
+  assert.equal(view.tram.hints.length, 1)
+  assert.deepEqual(Object.keys(view.tram.hints[0]).sort(), ['at', 'level', 'text'])
+  assert.equal(view.tram.nextHintIn, 3)
+  assert.equal(view.tram.period, null)
+  assert.equal(view.tram.stage, 'map')
+  assert.equal(view.tram.puzzle, null)
+  for (const id of keyIds) {
+    const p = g.game.provinces.get(id)
+    for (const s of [id, p.name, p.fullName]) assert.ok(!text.includes(s), `lộ ${s}`)
+  }
+  const period = tramFixture.periods.get(st.period)
+  for (const s of [period.name, period.puzzle.text, '"answer"', '"keys":[', '"province":"ca-mau"']) assert.ok(!text.includes(s), `lộ ${s}`)
+  assert.ok(!text.includes(period.questions[0].content))
+  // mở map: có period.name, vẫn không có đáp án / chữ ghép đầy đủ
+  setTram(g.db, t, { stage: 'special', openedAt: g.now() })
+  const open = g.game.teamView(t)
+  assert.equal(open.tram.period.name, period.name)
+  assert.equal(open.tram.period.id, period.id)
+  assert.ok(!JSON.stringify(open).includes('"answer"'))
+  assert.ok(!JSON.stringify(open).includes(period.puzzle.text))
+  // câu đang chờ: PublicSpecial không có đáp án
+  const pub = g.game.specialNext(t)
+  const v = g.game.teamView(t).tram.special
+  assert.deepEqual(v.pending, pub)
+  assert.deepEqual(Object.keys(v.pending).sort(), ['content', 'deadline', 'done', 'freeUntil', 'id', 'issuedAt', 'of', 'options', 'star'])
+  assert.equal(v.pending.deadline - v.pending.issuedAt, 45_000)
+  assert.equal(v.pending.freeUntil - v.pending.issuedAt, 20_000)
+})
+
+test('teamView.tram: mảnh ghép theo thứ tự hiện, i là vị trí, không lộ thứ tự đúng', () => {
+  const g = puzzleAt()
+  const t = g.teams[0].id
+  const st = getTram(g.db, t)
+  const splits = tramFixture.periods.get(st.period).puzzle.splits[st.need]
+  const view = g.game.teamView(t).tram
+  assert.deepEqual(view.puzzle.pieces, [2, 0, 4, 1, 3].map((pi, i) => ({ i, text: splits[pi] })))
+  assert.notDeepEqual(view.puzzle.pieces.map(p => p.text), splits)
+  assert.equal(view.puzzle.lockedUntil, null)
+  const text = JSON.stringify(g.game.teamView(t))
+  assert.ok(!text.includes('display'))
+  assert.ok(!text.includes(tramFixture.periods.get(st.period).puzzle.text))
+  // client ghép theo vị trí i đúng -> submitPuzzle nhận
+  const order = g.solve(t)
+  const byText = order.map(pos => view.puzzle.pieces[pos].text)
+  assert.deepEqual(byText, splits)
+  g.game.submitPuzzle(t, order)
+  assert.equal(g.game.teamView(t).tram.puzzle, null)
+  assert.equal(g.game.teamView(t).tram.stage, 'done')
+  assert.ok(g.game.teamView(t).tram.finishedAt)
+})
+
+test('xếp hạng tram: bằng điểm -> về đích trước xếp trên; chưa về đích xếp sau', () => {
+  const g = tramAt('hue', 3)
+  const [a, b, c] = g.teams.map(x => x.id)
+  setTram(g.db, a, { finishedAt: g.now() + 5000, stage: 'done' })
+  setTram(g.db, b, { finishedAt: g.now() + 1000, stage: 'done' })
+  g.db.prepare('UPDATE teams SET answer_ms = 10 WHERE id = ?').run(c) // chưa về, answerMs nhỏ hơn
+  g.db.prepare('UPDATE teams SET answer_ms = 99 WHERE id IN (?, ?)').run(a, b)
+  const rank = g.game.scores().sort(byRank).map(s => s.teamId)
+  assert.deepEqual(rank, [b, a, c])
+  const sb = g.game.screenView().scoreboard
+  assert.equal(sb.length, 3)
+  assert.deepEqual(sb.map(x => x.finished), [true, true, false])
+  assert.ok(sb.every(x => x.need === 5 && x.keys === 0))
+  // điểm cao hơn vẫn thắng về đích
+  g.db.prepare('UPDATE teams SET bonus_points = 100 WHERE id = ?').run(c)
+  assert.equal(g.game.scores().sort(byRank)[0].teamId, c)
+  // chủ phòng thấy tiến độ, không thấy tỉnh key
+  const owner = g.game.ownerView()
+  assert.deepEqual(owner.teams.map(x => x.stage), ['done', 'done', 'map'])
+  assert.ok(!JSON.stringify(owner).includes('"keys":[{'))
+})
+
+test('hết giờ ở map đặc biệt: điểm = tem + free + câu đúng, finishBonus 0', () => {
+  const g = specialAt({ durationMin: 30 })
+  const t = g.teams[0].id
+  g.db.prepare('UPDATE teams SET bonus_points = 777 WHERE id = ?').run(t)
+  setTram(g.db, t, { free: 777 })
+  const pub = g.game.specialNext(t)
+  g.now.advance(5_000)
+  const r = g.game.specialAnswer(t, pub.id, g.right(t, pub))
+  assert.equal(r.correct, true)
+  g.now.advance(31 * 60_000)
+  assert.equal(g.game.state().status, 'ended')
+  const stamps = g.pts('hue')
+  assert.equal(scoreOf(g, t).total, stamps + 777 + 500)
+  const v = g.game.teamView(t).tram
+  assert.equal(v.finishBonus, 0)
+  assert.equal(v.finishedAt, null)
+  assert.equal(v.special.done, 1)
+  assert.equal(v.free, 777)
+  assert.equal(g.game.replay().mode, 'tram')
+})
+
+test('người vào muộn: teamView có đủ gợi ý và mảnh đã nhặt', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  const st = getTram(g.db, t)
+  const hints = [
+    { key: 0, level: 1, text: 'Gợi ý một', at: 1 },
+    { key: 1, level: 1, text: 'Gợi ý hai', at: 2 },
+  ]
+  const keys = st.keys.map((k, i) => (i === 2 ? { ...k, found: true, foundAt: 3 } : i === 3 ? { ...k, found: true, foundAt: 1 } : k))
+  keys[3].found = false // chỉ một key đã nhặt
+  setTram(g.db, t, { hints, keys, correct: 4 })
+  const splits = tramFixture.periods.get(st.period).puzzle.splits[st.need]
+  const late = g.core.joinRoom(g.room.code, 'Người muộn', t)
+  assert.ok(late)
+  const v = g.game.teamView(t).tram
+  assert.equal(v.hints.length, 2)
+  assert.equal(v.pieces.length, 1)
+  assert.deepEqual(v.pieces, [splits[keys[2].piece]])
+  assert.equal(v.found, 1)
+  assert.equal(v.nextHintIn, 2)
 })

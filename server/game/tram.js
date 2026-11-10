@@ -216,10 +216,15 @@ export function createTram(ctx) {
     return { t, st }
   }
 
+  // Câu map đang chờ gửi cho client (action trả về và teamView dùng chung): không có đáp án, lựa chọn đã xáo theo order
   function publicSpecial(st) {
     const p = st.special.pending
     const qn = content.periods.get(st.period).questions.find(x => x.id === p.id)
-    return { id: p.id, content: qn.content, options: p.order.map(i => qn.options[i]), at: p.at, star: p.star, done: st.special.done, of: RULES.tram.specialCount }
+    return {
+      id: p.id, content: qn.content, options: p.order.map(i => qn.options[i]),
+      issuedAt: p.at, freeUntil: p.at + RULES.answerFreeMs.siege, deadline: p.at + RULES.answerLimitMs.siege, star: p.star,
+      done: st.special.done, of: RULES.tram.specialCount, // test cũ / client đọc tiến độ từ câu
+    }
   }
 
   function specialNext(teamId, by = null) {
@@ -326,5 +331,41 @@ export function createTram(ctx) {
     })
   }
 
-  return { setupTeams, state, save, shift, specialNext, specialAnswer, specialSkip, submitPuzzle, onCorrect, tick, armStar, consumeStar, placeKeys: (start, n, eligible) => placeKeys(start, n, eligible, { provinces, adjacency, random }) }
+  // Dữ liệu tram của một team gửi cho chính team đó: không có tỉnh của key, đáp án, thứ tự đúng của mảnh ghép;
+  // thời kỳ chỉ lộ sau khi mở map
+  function teamPublic(t, now_ = now()) {
+    const st = state(t)
+    const room = q.room.get(roomId)
+    const period = content.periods.get(st.period)
+    const splits = period.puzzle.splits[String(st.need)]
+    let puzzle = null
+    if (st.stage === 'puzzle') {
+      if (!st.puzzle.display) { st.puzzle.display = randomDisplay(st.need); save(t.id, st) } // cùng thứ tự với submitPuzzle
+      puzzle = {
+        pieces: st.puzzle.display.map((pieceIndex, i) => ({ i, text: splits[pieceIndex] })),
+        lockedUntil: st.puzzle.lockedUntil && st.puzzle.lockedUntil > now_ ? st.puzzle.lockedUntil : null,
+      }
+    }
+    const found = st.keys.filter(k => k.found).sort((a, b) => a.foundAt - b.foundAt)
+    return {
+      need: st.need,
+      found: found.length,
+      pieces: found.map(k => splits[k.piece]),
+      hints: st.hints.map(h => ({ level: h.level, text: h.text, at: h.at })),
+      nextHintIn: RULES.tram.hintEvery - st.correct % RULES.tram.hintEvery,
+      star: st.star,
+      stage: st.stage,
+      rescueAt: room.ends_at ? room.ends_at - room.duration_min * 30_000 : null,
+      period: st.stage === 'map' ? null : { id: period.id, name: period.name, years: period.years, scene: period.scene },
+      special: {
+        done: st.special.done, of: RULES.tram.specialCount,
+        pending: st.special.pending ? publicSpecial(st) : null,
+        lockedUntil: st.special.lockedUntil && st.special.lockedUntil > now_ ? st.special.lockedUntil : null,
+      },
+      puzzle,
+      finishedAt: st.finishedAt, finishBonus: st.finishBonus, free: st.free,
+    }
+  }
+
+  return { teamPublic, setupTeams, state, save, shift, specialNext, specialAnswer, specialSkip, submitPuzzle, onCorrect, tick, armStar, consumeStar, placeKeys: (start, n, eligible) => placeKeys(start, n, eligible, { provinces, adjacency, random }) }
 }

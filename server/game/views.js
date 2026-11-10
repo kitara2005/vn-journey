@@ -6,11 +6,17 @@ export function createViews(ctx) {
   const {
     db, q, now, json, provinces, adjacency, collections, topicNames, roomId,
     state, activeEvent, requireTeam, shieldActive, pendingPublic, publicQuestion, choiceFor, siegeBlock, timedOut, lobby, sharedPublic, lobbyFacts,
-    correctAnswerText, isSolo, usesStamps,
+    correctAnswerText, isSolo, isTram, usesStamps, tramApi,
   } = ctx
 
   // ---------- Điểm ----------
   // Phòng đơn: "tỉnh của mình" = tỉnh đã có tem (tính điểm tỉnh, bộ sưu tập, xuyên 3 miền như phòng team)
+  // Phòng Chạy trạm: số key đã nhặt, số key cần và giờ về đích (xếp hạng khi bằng điểm); phòng khác không có
+  const tramScore = t => {
+    const st = isTram() ? json(t.tram) : null
+    return st ? { keys: st.keys.filter(k => k.found).length, need: st.need, finishedAt: st.finishedAt } : {}
+  }
+
   function scores() {
     const owners = usesStamps() ? q.roomStamps.all(roomId) : q.owners.all(roomId)
     return q.teams.all(roomId).map(t => {
@@ -27,6 +33,7 @@ export function createViews(ctx) {
         collections: doneCollections.map(c => c.id),
         total: base + t.bonus_points + collectionBonus + crossRegion,
         answerMs: t.answer_ms,
+        ...tramScore(t),
       }
     })
   }
@@ -166,6 +173,7 @@ export function createViews(ctx) {
       facts: s.status === 'waiting' ? lobbyFacts() : null,
       factMs: RULES.factMs,
       alerts,
+      ...(isTram() ? { tram: tramApi.teamPublic(t) } : {}),
     }
   }
 
@@ -222,7 +230,10 @@ export function createViews(ctx) {
       scoreboard: frozen ? null : scores()
         .sort(byRank)
         .slice(0, solo ? RULES.screenTop : undefined)
-        .map(({ name, color, mascot, total, answerMs, provinces: n }) => ({ name, color, mascot, total, answerMs, provinces: n })),
+        .map(({ name, color, mascot, total, answerMs, provinces: n, keys, need, finishedAt }) => ({
+          name, color, mascot, total, answerMs, provinces: n,
+          ...(isTram() ? { keys, need, finished: finishedAt != null } : {}),
+        })),
       players: all.length,
       // Phòng đơn: bản đồ nhiệt "cả phòng đang đi đâu" — số người có tem mỗi tỉnh (không lộ là ai)
       heat: solo && s.status !== 'waiting' ? Object.fromEntries(q.stampCounts.all(roomId).map(r => [r.province_id, r.n])) : null,
@@ -236,6 +247,12 @@ export function createViews(ctx) {
         : solo ? all.slice(-RULES.screenTop * 2).reverse().map(({ name, color, mascot }) => ({ name, color, mascot, members: 1 })) // người mới vào trước
         : lobby(s.code).teams.map(({ name, color, mascot, members }) => ({ name, color, mascot, members })),
     }
+  }
+
+  // Chủ phòng thấy tiến độ từng team (số key, giai đoạn, về đích) — không thấy tỉnh của key
+  const tramOwner = t => {
+    const st = json(t.tram)
+    return { keys: st.keys.filter(k => k.found).length, need: st.need, stage: st.stage, finished: st.finishedAt != null }
   }
 
   // Toàn cảnh cho chủ phòng (MC)
@@ -262,6 +279,7 @@ export function createViews(ctx) {
         cards: q.cards.all(t.id).map(c => c.kind),
         members: players.filter(p => p.team_id === t.id).map(p => ({ id: p.id, name: p.name })),
         ...(isSolo() ? { pioneers: pioneers.get(t.id) ?? 0 } : {}),
+        ...(isTram() ? tramOwner(t) : {}),
       })),
       ownership: Object.fromEntries(owners.map(o => [o.province_id, { team: o.team_id, shieldUntil: o.shield_until }])),
       scores: scores(),
@@ -329,7 +347,7 @@ export function createViews(ctx) {
   function replay() {
     if (state().status !== 'ended') throw new GameError('not-ended', 'Chỉ xem lại được sau khi kết thúc', 409)
     return {
-      mode: isSolo() ? 'solo' : 'team',
+      mode: state().mode,
       teams: q.teams.all(roomId).map(t => ({ id: t.id, name: t.name, color: t.color, mascot: t.mascot })),
       events: db.prepare(`SELECT team_id, action, province_id, detail, created_at FROM events_log
                           WHERE room_id = ? AND action NOT IN ('home', 'rename') ORDER BY id`).all(roomId) // quê thành viên: chỉ đồng đội biết; sửa tên: chỉ chủ phòng
