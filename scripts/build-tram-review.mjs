@@ -13,7 +13,9 @@ const readJson = name => JSON.parse(readFileSync(join(ROOT, 'data', name), 'utf8
 const { provinces } = readJson('provinces.json')
 const { hints } = readJson('key-hints.json')
 const { periods } = readJson('periods.json')
-const notes = existsSync(join(ROOT, 'data', 'tram-verify-notes.json')) ? readJson('tram-verify-notes.json') : {}
+const vn = existsSync(join(ROOT, 'data', 'tram-verify-notes.json')) ? readJson('tram-verify-notes.json') : {}
+const notes = vn.current || {}
+const removed = vn.removed || []
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 // Chỉ cho link http(s) bấm được; còn lại hiện dạng chữ thường
@@ -24,13 +26,13 @@ const sources = list => `<div class="src">Nguồn: ${(list || []).map(link).join
 const status = o => o.reviewed ? '<span class="st ok">đã duyệt</span>' : '<span class="st wait">chờ duyệt</span>'
 const lv = n => `<span class="lv lv${esc(n)}">Mức ${esc(n)}</span>`
 
+const VLABEL = { ok: 'ok', fixed: 'đã sửa', new: 'câu mới' }
 const verdictOf = id => {
   const n = notes[id]
   if (!n) return ''
-  const flag = n.verdict && n.verdict !== 'ok'
   const issues = (n.issues || []).map(i => `<li>${esc(i)}</li>`).join('')
-  if (!flag && !issues) return ''
-  return `<div class="vnote${flag ? ' flag' : ''}"><b>Kiểm chứng: ${esc(n.verdict)}${flag ? ' (đã sửa theo ghi chú)' : ''}</b>${issues ? `<ul>${issues}</ul>` : ''}</div>`
+  const flag = n.verdict !== 'ok' || issues
+  return `<div class="vnote${flag ? ' flag' : ''}"><b>Kiểm chứng: ${esc(VLABEL[n.verdict] || n.verdict)}</b>${n.origin ? ` <small>(từ ${esc(n.origin)})</small>` : ''}${issues ? `<ul>${issues}</ul>` : ''}</div>`
 }
 
 const provSections = provinces.map(p => {
@@ -46,11 +48,9 @@ const provSections = provinces.map(p => {
 }).join('\n')
 
 const periodSections = periods.map(pe => {
-  const qids = new Set(pe.questions.map(q => q.id))
-  const extra = Object.keys(notes).filter(k => k.startsWith(pe.id + '-') && !qids.has(k) && k !== pe.id + '-puzzle')
   const sc = pe.scene || {}
   const qs = pe.questions.map((q, i) => `<div class="q">
-    <div class="meta"><b>${i + 1}.</b> <span class="tag">${esc(q.id)}</span> ${lv(q.level)} ${status(q)}</div>
+    <div class="meta"><b>${i + 1}.</b> <span class="tag">${esc(q.id)}</span> ${lv(q.level)}</div>
     <div class="content">${esc(q.content)}</div>
     <ol class="opts" type="A">${(q.options || []).map((o, k) => `<li class="${k === q.answer ? 'ok' : ''}">${esc(o)}${k === q.answer ? ' (đáp án)' : ''}</li>`).join('')}</ol>
     <div class="exp">${esc(q.explanation)}</div>${sources(q.sources)}${verdictOf(q.id)}</div>`).join('')
@@ -64,12 +64,12 @@ const periodSections = periods.map(pe => {
   <h3>Câu ghép</h3>
   <div class="q"><div class="content">${esc(pz.text)}</div><div class="exp">${esc(pz.explanation)}</div>${sources(pz.sources)}${verdictOf(pe.id + '-puzzle')}
     <div class="tbl"><table>${splits}</table></div></div>
-  ${extra.length ? `<h3>Ghi chú kiểm chứng khác (mục đã thay/bỏ)</h3>${extra.map(k => `<div class="q"><span class="tag">${esc(k)}</span>${verdictOf(k) || ' (không có ghi chú)'}</div>`).join('')}` : ''}
 </section>`
 }).join('\n')
 
 const nHints = Object.values(hints).flat()
-const nWait = nHints.filter(h => !h.reviewed).length + periods.reduce((a, p) => a + p.questions.filter(q => !q.reviewed).length + (p.reviewed ? 0 : 1), 0)
+const nWait = nHints.filter(h => !h.reviewed).length + periods.filter(p => !p.reviewed).length
+const removedHtml = removed.length ? `<div class="card"><h2>Câu đã bỏ khi kiểm chứng</h2><ul>${removed.map(r => `<li><span class="tag">${esc(r.originalId)}</span> ${esc(r.reason)}</li>`).join('')}</ul></div>` : ''
 
 const html = `<!doctype html>
 <html lang="vi">
@@ -117,10 +117,11 @@ const html = `<!doctype html>
   <h1>Duyệt nội dung Chạy trạm</h1>
   <div class="card">
     <h2>Cách duyệt</h2>
-    <p>Đọc từng mục bên dưới, bấm nguồn để đối chiếu. Mục nào đạt: mở <code>data/key-hints.json</code> (gợi ý) hoặc <code>data/periods.json</code> (thời kỳ, câu hỏi, câu ghép) và đổi <code>"reviewed": false</code> thành <code>"reviewed": true</code> ở đúng mục đó. Sau đó chạy <code>pnpm run data:check</code> (phải 0 lỗi) rồi <code>pnpm run tram:review</code> để dựng lại trang này. Chỉ mục đã duyệt mới được dùng trong game.</p>
-    <p>Hiện còn <b>${nWait}</b> mục chờ duyệt: ${nHints.length} gợi ý (${provinces.length} tỉnh), ${periods.length} thời kỳ. Khung đỏ ở phần kiểm chứng là chỗ người kiểm chứng đã sửa hoặc cần chú ý.</p>
+    <p>Đọc từng mục bên dưới, bấm nguồn để đối chiếu. Duyệt theo hai mức: (1) <b>thời kỳ</b> &mdash; đặt <code>"reviewed": true</code> ở đối tượng thời kỳ trong <code>data/periods.json</code> để duyệt cả thời kỳ (mọi câu hỏi + câu ghép); muốn loại một câu thì xóa câu đó hoặc yêu cầu sửa trước khi duyệt; (2) <b>gợi ý</b> &mdash; đặt <code>"reviewed": true</code> ở từng gợi ý trong <code>data/key-hints.json</code>. Sau đó chạy <code>pnpm run data:check</code> (phải 0 lỗi) và <code>pnpm run tram:review</code> để dựng lại trang. Chỉ mục đã duyệt mới được dùng trong game.</p>
+    <p>Hiện còn <b>${nWait}</b> mục chờ duyệt: ${nHints.filter(h => !h.reviewed).length} gợi ý (${provinces.length} tỉnh) và ${periods.filter(p => !p.reviewed).length} thời kỳ. Ô kiểm chứng màu đỏ là chỗ đã sửa, câu mới hoặc có lưu ý.</p>
     <nav>${periods.map(p => `<a href="#t-${esc(p.id)}">${esc(p.name)}</a>`).join('')}<a href="#hints">Gợi ý theo tỉnh</a></nav>
   </div>
+${removedHtml}
 ${periodSections}
   <h2 id="hints" style="margin-top:28px">Gợi ý theo tỉnh (${provinces.length} tỉnh x 2)</h2>
 ${provSections}
