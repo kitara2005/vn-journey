@@ -91,6 +91,8 @@ export const RULES = {
   durationMin: { min: 10, max: 90 },
   // Số câu phải trả lời đúng ở một tỉnh trống (chủ phòng chọn lúc tạo phòng; 1 = luật gốc). Sai giữa chừng giữ tiến độ
   quizCount: { min: 1, max: 3, default: 1 },
+  // Chế độ Chạy trạm (spec 2026-11-09-tram-mode-design.md §3.1); spareHints: cần ≥ keyCount + spareHints tỉnh có gợi ý
+  tram: { keyCount: { min: 3, max: 7, default: 5 }, hintEvery: 3, minDurationMin: 30, specialCount: 3, specialPoints: 500, puzzlePoints: 1000, finishPerMin: 30, lockMs: 30_000, spareHints: 3 },
 }
 
 export const TEAM_STYLES = [

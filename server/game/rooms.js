@@ -4,7 +4,7 @@ import { transaction } from '../db.js'
 import { RULES, TEAM_STYLES, GameError, normalizeText, cleanName } from './rules.js'
 
 export function createRooms(ctx) {
-  const { db, q, now, json, provinces, timedOut, defaultDurationMin, newCode, hashSecret, sealSecret, room: roomScope } = ctx
+  const { db, q, tram, now, json, provinces, timedOut, defaultDurationMin, newCode, hashSecret, sealSecret, room: roomScope } = ctx
 
   // ---------- Phòng ----------
   function uniqueRoomCode() {
@@ -17,12 +17,12 @@ export function createRooms(ctx) {
 
   // Tạo phòng + các team. Trả về mã chủ phòng (chỉ hiện 1 lần) và mã màn chiếu.
   // mode 'solo': phòng chơi đơn — chưa tạo team nào; mỗi người vào phòng thành một team ẩn 1 người (joinRoom)
-  function createRoom({ name, teamCount, durationMin, topicChoice = false, betChoice = false, mode = 'team', pioneer = true, preset = null, quizCount = RULES.quizCount.default, listed = false } = {}) {
+  function createRoom({ name, teamCount, durationMin, topicChoice = false, betChoice = false, mode = 'team', pioneer = true, preset = null, quizCount = RULES.quizCount.default, listed = false, keyCount } = {}) {
     const roomName = cleanName(name, RULES.roomNameMaxLength)
     if (!roomName) throw new GameError('bad-room', 'Cần đặt tên phòng')
-    if (!['team', 'solo'].includes(mode)) throw new GameError('bad-room', 'Kiểu phòng không hợp lệ')
+    if (!['team', 'solo', 'tram'].includes(mode)) throw new GameError('bad-room', 'Kiểu phòng không hợp lệ')
     const n = mode === 'solo' ? 0 : Number(teamCount)
-    if (mode === 'team' && (!Number.isInteger(n) || n < RULES.minTeams || n > RULES.maxTeams)) {
+    if (mode !== 'solo' && (!Number.isInteger(n) || n < RULES.minTeams || n > RULES.maxTeams)) {
       throw new GameError('bad-room', `Số team phải từ ${RULES.minTeams} đến ${RULES.maxTeams}`)
     }
     const minutes = durationMin == null || durationMin === '' ? defaultDurationMin : Number(durationMin)
@@ -33,6 +33,21 @@ export function createRooms(ctx) {
     if (!Number.isInteger(quiz) || quiz < RULES.quizCount.min || quiz > RULES.quizCount.max) {
       throw new GameError('bad-room', `Số câu mỗi tỉnh phải từ ${RULES.quizCount.min} đến ${RULES.quizCount.max}`)
     }
+    // Phòng tram: ép tắt cược/chủ đề/tiên phong, 1 câu mỗi tỉnh; kiểm số key, thời lượng và nội dung đã duyệt
+    const T = RULES.tram
+    let keys = T.keyCount.default
+    if (mode === 'tram') {
+      keys = keyCount == null || keyCount === '' ? T.keyCount.default : Number(keyCount)
+      if (!Number.isInteger(keys) || keys < T.keyCount.min || keys > T.keyCount.max) {
+        throw new GameError('bad-room', `Số key phải từ ${T.keyCount.min} đến ${T.keyCount.max}`)
+      }
+      if (minutes < T.minDurationMin) throw new GameError('bad-room', `Phòng Chạy trạm cần thời lượng từ ${T.minDurationMin} phút`)
+      if (!tram?.periods?.size || (tram.hints?.size ?? 0) < keys + T.spareHints) {
+        throw new GameError('tram-content', 'Chưa đủ nội dung đã duyệt để mở phòng Chạy trạm', 503)
+      }
+      topicChoice = false; betChoice = false; pioneer = false
+    }
+    const quizN = mode === 'tram' ? 1 : quiz
     const open = db.prepare("SELECT COUNT(*) AS n FROM rooms WHERE status != 'ended' AND preset IS NULL").get().n
     if (!preset && open >= RULES.maxOpenRooms) throw new GameError('too-many-rooms', 'Máy chủ đang có quá nhiều phòng, thử lại sau', 503)
 
@@ -40,9 +55,9 @@ export function createRooms(ctx) {
     const screenCode = newCode(6)
     const code = uniqueRoomCode()
     return transaction(db, () => {
-      const { lastInsertRowid } = db.prepare(`INSERT INTO rooms (code, name, owner_key_hash, owner_key_sealed, screen_code, duration_min, topic_choice, bet_choice, mode, pioneer, preset, quiz_count, listed, created_at)
-                                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(code, roomName, hashSecret(ownerKey), sealSecret ? sealSecret(ownerKey) : null, screenCode, minutes, topicChoice ? 1 : 0, betChoice ? 1 : 0, mode, pioneer ? 1 : 0, preset, quiz, listed && !preset ? 1 : 0, now())
+      const { lastInsertRowid } = db.prepare(`INSERT INTO rooms (code, name, owner_key_hash, owner_key_sealed, screen_code, duration_min, topic_choice, bet_choice, mode, pioneer, preset, quiz_count, key_count, listed, created_at)
+                                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(code, roomName, hashSecret(ownerKey), sealSecret ? sealSecret(ownerKey) : null, screenCode, minutes, topicChoice ? 1 : 0, betChoice ? 1 : 0, mode, pioneer ? 1 : 0, preset, quizN, keys, listed && !preset ? 1 : 0, now())
       const roomId = Number(lastInsertRowid)
       for (const style of TEAM_STYLES.slice(0, n)) {
         db.prepare('INSERT INTO teams (room_id, name, color, mascot) VALUES (?, ?, ?, ?)')

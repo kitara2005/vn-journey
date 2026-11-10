@@ -61,6 +61,8 @@ export function createRoomScope(ctx, roomId) {
   const shieldActive = o => o && o.shield_until && o.shield_until > now()
   // Phòng chơi đơn (mỗi người một hành trình — tem thay cho chủ tỉnh)
   const isSolo = () => q.room.get(roomId)?.mode === 'solo'
+  const isTram = () => q.room.get(roomId)?.mode === 'tram'
+  const usesStamps = () => isSolo() || isTram() // dùng tem thay cho chủ tỉnh
 
   // Phòng đơn vừa kết thúc: ghi điểm từng người vào bảng xếp hạng cả sự kiện (gọi trong transaction kết thúc).
   // Bỏ người chưa có tem nào và 0 điểm. "Chơi lại" rồi kết thúc lần nữa = thêm một trận
@@ -74,7 +76,7 @@ export function createRoomScope(ctx, roomId) {
     }
   }
 
-  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo }
+  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps }
   const questions = createQuestions(rctx)
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions })
   const { startShared, voteShared, settleShared, closeShared, sharedPublic } = createShared({ ...rctx, ...questions })
@@ -94,7 +96,7 @@ export function createRoomScope(ctx, roomId) {
     state, react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, scores,
     teamView, screenView, ownerView, replay, news, journal,
     kickPlayer, renamePlayer, leave, releaseHost, start, pause, resume, end, reset, triggerEvent, adjustScore, setTopicChoice, setBetChoice,
-    startShared, voteShared, settleShared, spawnSolo, isSolo,
+    startShared, voteShared, settleShared, spawnSolo, isSolo, isTram, usesStamps,
     questionStats: () => questionStats(roomId),
   }
 }

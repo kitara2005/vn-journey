@@ -191,7 +191,7 @@ export function createApp({ db, config, now = Date.now, random = Math.random }) 
           throw new GameError('too-many-own', `Bạn đang có ${RULES.maxRoomsPerCreator} phòng chưa kết thúc — kết thúc bớt phòng cũ (trang chủ phòng) rồi tạo tiếp`, 429)
         }
         const r = game.createRoom({ name: body.name, teamCount: body.teamCount, durationMin: body.durationMin, topicChoice: body.topicChoice === true, betChoice: body.betChoice !== false,
-          mode: body.mode === 'solo' ? 'solo' : 'team', pioneer: body.pioneer !== false, quizCount: body.quizCount, listed: body.listed === true })
+          mode: ['solo', 'tram'].includes(body.mode) ? body.mode : 'team', keyCount: body.keyCount, pioneer: body.pioneer !== false, quizCount: body.quizCount, listed: body.listed === true })
         housekeeping.noteCreated(creator, r.roomId)
         setSession(res, 'owner', auth.createSession('owner', { roomId: r.roomId }))
         return { role: 'owner', code: r.code, ownerKey: r.ownerKey, screenCode: r.screenCode }
@@ -285,7 +285,7 @@ export function createApp({ db, config, now = Date.now, random = Math.random }) 
     'POST /api/sys/rooms': {
       sys: true,
       run: ({ body, admin }) => sys.createRoom({ name: body.name, teamCount: body.teamCount, durationMin: body.durationMin, topicChoice: body.topicChoice === true,
-        betChoice: body.betChoice !== false, mode: body.mode === 'solo' ? 'solo' : 'team', pioneer: body.pioneer !== false, quizCount: body.quizCount,
+        betChoice: body.betChoice !== false, mode: ['solo', 'tram'].includes(body.mode) ? body.mode : 'team', keyCount: body.keyCount, pioneer: body.pioneer !== false, quizCount: body.quizCount,
         listed: body.listed === true }, admin),
     },
     'POST /api/sys/room/codes': { sys: true, run: ({ body, admin }) => sys.roomCodes(body.roomId, admin) },
