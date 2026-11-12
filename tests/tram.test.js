@@ -123,13 +123,13 @@ test('tram: thành phố không rơi thẻ, không chuỗi thẻ, không siêu t
   assert.equal(streak.card, null)
   assert.equal(streak.bonus, 0)
   assert.equal(g2.db.prepare('SELECT COUNT(*) n FROM cards WHERE team_id = ?').get(u).n, 0)
-  // sai: khóa đúng 30 giây, không khóa thêm vì cược
+  // sai: khóa đúng RULES.tram.lockMs, không khóa thêm vì cược
   const g3 = tramAt('hue')
   const w = g3.teams[0].id
   const { question: wq } = g3.game.move(w, 'quang-tri')
   const before = g3.bonus(w)
   const res = g3.game.answer(w, wq.id, wrongAnswer(g3.db, w))
-  assert.equal(res.lockedUntil - g3.now(), 30_000)
+  assert.equal(res.lockedUntil - g3.now(), RULES.tram.lockMs)
   assert.equal(g3.bonus(w), before)
 })
 
@@ -144,7 +144,7 @@ test('tram: hai team cùng có tem một tỉnh (không tranh tỉnh)', () => {
 })
 
 // ---------- Bắt đầu trận: thời kỳ, rải key, mảnh ghép ----------
-test('placeKeys: 200 seed — đủ n, không trùng, không phải start/kề start; mỗi miền ≥ 1, không hai key kề', () => {
+test('placeKeys: 200 seed — đủ n, không trùng, không phải start/kề start, không hai key kề; đường đi qua mọi key ≤ 2n bước', () => {
   const { core } = setupGame({ start: false })
   const { provinces, adjacency } = core
   const eligible = [...tramFixture.hints.keys()]
@@ -159,10 +159,22 @@ test('placeKeys: 200 seed — đủ n, không trùng, không phải start/kề s
       assert.ok(!adjacency.get(start).has(k))
       assert.ok(eligible.includes(k))
     }
-    assert.equal(new Set(keys.map(k => provinces.get(k).region)).size, 3)
     for (const a of keys) for (const b of keys) assert.ok(a === b || !adjacency.get(a).has(b))
+    assert.ok(shortestRoute(adjacency, start, keys) <= 10, `seed ${seed}: đường ${shortestRoute(adjacency, start, keys)} bước`)
   }
 })
+
+// Số bước ít nhất để đi từ start qua mọi tỉnh trong keys (thử mọi thứ tự; n nhỏ)
+function shortestRoute(adjacency, start, keys) {
+  const steps = from => {
+    const d = new Map([[from, 0]]), queue = [from]
+    for (let i = 0; i < queue.length; i++) for (const nb of adjacency.get(queue[i])) if (!d.has(nb)) { d.set(nb, d.get(queue[i]) + 1); queue.push(nb) }
+    return d
+  }
+  const dist = new Map([start, ...keys].map(id => [id, steps(id)]))
+  const go = (cur, left) => left.length ? Math.min(...left.map((k, i) => dist.get(cur).get(k) + go(k, left.filter((_, j) => j !== i)))) : 0
+  return go(start, keys)
+}
 
 test('placeKeys: ít ứng viên vẫn đủ n (hạ ràng buộc)', () => {
   const { core } = setupGame({ start: false })
@@ -364,7 +376,7 @@ test('tram: sao + sai -> trừ điểm gốc, khóa 30 giây', () => {
   const before = g.bonus(t)
   const r = g.game.answer(t, question.id, wrongAnswer(g.db, t))
   assert.equal(g.bonus(t) - before, -g.pts('quang-tri'))
-  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(r.lockedUntil - g.now(), RULES.tram.lockMs)
   assert.equal(starOf(g, t), 'used')
 })
 
@@ -376,7 +388,7 @@ test('tram: sao + skip -> như sai', () => {
   const before = g.bonus(t)
   const r = g.game.skip(t)
   assert.equal(g.bonus(t) - before, -g.pts('quang-tri'))
-  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(r.lockedUntil - g.now(), RULES.tram.lockMs)
   assert.equal(starOf(g, t), 'used')
 })
 
@@ -470,6 +482,7 @@ test('special: 3 câu đúng trong 20 giây đầu -> +1500, stage puzzle; câu 
     const r = g.game.specialAnswer(t, pub.id, g.right(t, pub))
     assert.equal(r.correct, true)
     assert.equal(r.points, 500)
+    assert.equal(r.done, i + 1) // tiến độ thật để client gán lại, không tự cộng
     assert.ok(r.correctAnswer && r.explanation)
   }
   assert.equal(g.bonus(t) - before, 1500)
@@ -487,41 +500,51 @@ test('special: sai -> khóa 30 giây, không lộ đáp án; specialNext khi kh�
   const r = g.game.specialAnswer(t, pub.id, g.wrong(t, pub))
   assert.equal(r.correct, false)
   assert.equal(r.correctAnswer, undefined)
-  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(r.lockedUntil - g.now(), RULES.tram.lockMs)
   assert.throws(() => g.game.specialNext(t), e => e.code === 'locked')
-  g.now.advance(30_001)
+  g.now.advance(RULES.tram.lockMs + 1)
   const next = g.game.specialNext(t)
   assert.notEqual(next.id, pub.id)
   assert.equal(g.game.specialNext(t).id, next.id) // idempotent
 })
 
-test('special: skip = sai; hết giờ = sai; sao: x2 khi đúng, -500 khi sai', () => {
+test('special: skip = sai; hết giờ = sai; ngôi sao không bật được, câu thời kỳ không mang sao', () => {
   const g = specialAt()
   const [t, u] = g.teams.map(x => x.id)
   const pubT = g.game.specialNext(t)
-  assert.equal(g.game.specialSkip(t, pubT.id).lockedUntil - g.now(), 30_000)
+  assert.equal(g.game.specialSkip(t, pubT.id).lockedUntil - g.now(), RULES.tram.lockMs)
   g.game.specialNext(u)
   g.now.advance(48_000)
   const pub = getTram(g.db, u).special.pending
   assert.equal(g.game.specialAnswer(u, pub.id, 0).timedOut, true)
-  // sao
+  // sao: chỉ ở trạm tỉnh
   const h = specialAt()
   const s = h.teams[0].id
-  h.game.armStar(s, true)
+  assert.throws(() => h.game.armStar(s, true), e => e instanceof GameError && e.code === 'star-map')
+  assert.equal(getTram(h.db, s).star, 'ready')
   const p1 = h.game.specialNext(s)
-  assert.equal(p1.star, true)
-  assert.equal(getTram(h.db, s).star, 'used')
-  assert.equal(h.game.specialAnswer(s, p1.id, h.right(s, p1)).points, 1000)
-  const b = h.bonus(s)
+  assert.equal(p1.star, undefined)
+  assert.equal(h.game.specialAnswer(s, p1.id, h.right(s, p1)).points, 500)
   const p2 = h.game.specialNext(s)
-  assert.equal(p2.star, false)
-  const k = specialAt()
-  const w = k.teams[0].id
-  k.game.armStar(w, true)
-  const p3 = k.game.specialNext(w)
-  const b3 = k.bonus(w)
-  k.game.specialAnswer(w, p3.id, k.wrong(w, p3))
-  assert.equal(k.bonus(w) - b3, -500)
+  const b2 = h.bonus(s)
+  const r2 = h.game.specialAnswer(s, p2.id, h.wrong(s, p2))
+  assert.equal(h.bonus(s), b2) // sai: không trừ điểm
+  assert.equal(r2.penalty, undefined)
+})
+
+test('tram: sao bật mà chưa dùng lúc mở map đặc biệt -> về ready', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  const st = getTram(g.db, t)
+  st.star = 'armed'
+  st.keys.forEach((k, i) => { k.found = i > 0; if (!i) k.province = 'quang-tri' })
+  setTram(g.db, t, st)
+  const { question } = g.game.move(t, 'quang-tri')
+  setTram(g.db, t, { ...getTram(g.db, t), star: 'armed' }) // câu đã phát (sao đã dùng) — giả lập bật lại sau khi phát
+  g.game.answer(t, question.id, correctAnswer(g.db, t))
+  const after = getTram(g.db, t)
+  assert.equal(after.stage, 'special')
+  assert.equal(after.star, 'ready')
 })
 
 test('special: hai người trả lời cùng câu -> lần 2 no-pending, điểm cộng một lần', () => {
@@ -558,7 +581,7 @@ test('special: tạm dừng giữa câu -> câu còn đủ giờ như trước k
   g.game.pause()
   g.now.advance(60_000)
   g.game.resume()
-  assert.equal(getTram(g.db, u).special.lockedUntil - g.now(), 30_000)
+  assert.equal(getTram(g.db, u).special.lockedUntil - g.now(), RULES.tram.lockMs)
   assert.ok(p2)
 })
 
@@ -585,7 +608,7 @@ test('puzzle: sai -> khóa 30 giây; đúng ở phút 20 trận 45 phút -> +100
   const bad = g.solve(t).reverse()
   const r = g.game.submitPuzzle(t, bad)
   assert.equal(r.correct, false)
-  assert.equal(r.lockedUntil - g.now(), 30_000)
+  assert.equal(r.lockedUntil - g.now(), RULES.tram.lockMs)
   assert.equal(getTram(g.db, t).puzzle.tries, 1)
   assert.throws(() => g.game.submitPuzzle(t, g.solve(t)), e => e.code === 'locked')
   assert.throws(() => g.game.submitPuzzle(u, [0, 0, 0, 0, 0]), e => e.code === 'bad-order')
@@ -654,7 +677,7 @@ test('teamView.tram: không lộ tỉnh key chưa nhặt, thời kỳ chưa mở
   const pub = g.game.specialNext(t)
   const v = g.game.teamView(t).tram.special
   assert.deepEqual(v.pending, pub)
-  assert.deepEqual(Object.keys(v.pending).sort(), ['content', 'deadline', 'done', 'freeUntil', 'id', 'issuedAt', 'of', 'options', 'star'])
+  assert.deepEqual(Object.keys(v.pending).sort(), ['content', 'deadline', 'done', 'freeUntil', 'id', 'issuedAt', 'of', 'options'])
   assert.equal(v.pending.deadline - v.pending.issuedAt, 45_000)
   assert.equal(v.pending.freeUntil - v.pending.issuedAt, 20_000)
 })
@@ -815,19 +838,17 @@ test('loadTramContent: tỉnh chỉ có gợi ý mức 2 đã duyệt bị bỏ;
   assert.equal(c.hints.get('B').length, 2)
 })
 
-test('specialNext: câu pending quá hạn -> xử lý như hết giờ (khóa 30 giây, sao trừ 500), không trả câu cũ', () => {
+test('specialNext: câu pending quá hạn -> xử lý như hết giờ (nghỉ chân, không trừ điểm), không trả câu cũ', () => {
   const g = specialAt()
   const t = g.teams[0].id
-  g.game.armStar(t, true)
-  const pub = g.game.specialNext(t)
-  assert.equal(pub.star, true)
+  g.game.specialNext(t)
   const before = g.bonus(t)
   g.now.advance(RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs + 1000)
   const r = g.game.specialNext(t)
   assert.equal(r.id, undefined) // không trả câu cũ
   assert.equal(r.timedOut, true)
-  assert.equal(r.lockedUntil - g.now(), 30_000)
-  assert.equal(g.bonus(t), before - 500)
+  assert.equal(r.lockedUntil - g.now(), RULES.tram.lockMs)
+  assert.equal(g.bonus(t), before)
   const st = getTram(g.db, t)
   assert.equal(st.special.pending, null)
   assert.ok(st.special.lockedUntil > g.now())

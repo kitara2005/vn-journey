@@ -2,18 +2,37 @@
 // bắt đầu trận (thời kỳ, rải key, mảnh ghép). Các luật gợi ý / cứu / câu hỏi / ghép thêm ở các task sau.
 
 import { transaction } from '../db.js'
-import { REGIONS, RULES, GameError, timePenaltyOf } from './rules.js'
+import { RULES, GameError, timePenaltyOf } from './rules.js'
 
 const TRIES = 200
 
-// Rải n key cho tỉnh xuất phát `start`: ứng viên = eligible trừ start và tỉnh kề start.
-// Thử ngẫu nhiên tối đa 200 lần: mỗi miền ≥ 1 key và không hai key kề nhau; không được → 200 lần chỉ đòi mỗi miền ≥ 1;
-// vẫn không được → n ứng viên bất kỳ; còn thiếu nữa → cho cả tỉnh kề start (không bao giờ là start). `random` truyền vào (ctx.random) để test cố định được.
-export function placeKeys(start, n, eligible, { provinces, adjacency, random }) {
-  const near = adjacency.get(start)
-  const far = eligible.filter(id => id !== start && !near.has(id))
-  let pool = far
-  const pick = () => {
+// Rải n key cho tỉnh xuất phát `start` theo "chuỗi": key sau cách key trước (key đầu: cách start) đúng 2 bước giáp ranh,
+// không key nào là start / kề start, không hai key kề nhau → đường đi ngắn nhất qua mọi key ≤ 2n bước, như nhau cho mọi team
+// (luật cũ "mỗi miền ≥ 1 key" bắt chạy dọc đất nước ~20 bước, quá lâu). Bí đường thì nới bước nhảy 2 → 2–3 → 2–4;
+// vẫn không được → n ứng viên bất kỳ không kề start; còn thiếu nữa → cho cả tỉnh kề start (không bao giờ là start).
+// Thử ngẫu nhiên tối đa 200 lần mỗi mức. `random` truyền vào (ctx.random) để test cố định được.
+export function placeKeys(start, n, eligible, { adjacency, random }) {
+  const steps = from => { // BFS: số bước giáp ranh từ `from`
+    const d = new Map([[from, 0]]), queue = [from]
+    for (let i = 0; i < queue.length; i++) for (const nb of adjacency.get(queue[i])) if (!d.has(nb)) { d.set(nb, d.get(queue[i]) + 1); queue.push(nb) }
+    return d
+  }
+  const far = eligible.filter(id => id !== start && !adjacency.get(start).has(id))
+  const pickOne = list => list[Math.floor(random() * list.length)]
+  for (const hops of [[2], [2, 3], [2, 3, 4]]) {
+    for (let i = 0; i < TRIES; i++) {
+      const keys = []
+      let d = steps(start)
+      while (keys.length < n) {
+        const c = far.filter(id => !keys.includes(id) && hops.includes(d.get(id)) && keys.every(k => !adjacency.get(k).has(id)))
+        if (!c.length) break
+        keys.push(pickOne(c))
+        d = steps(keys.at(-1))
+      }
+      if (keys.length === n) return keys
+    }
+  }
+  const shuffled = pool => {
     const a = [...pool]
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(random() * (i + 1))
@@ -21,17 +40,8 @@ export function placeKeys(start, n, eligible, { provinces, adjacency, random }) 
     }
     return a.slice(0, n)
   }
-  const everyRegion = keys => REGIONS.every(r => keys.some(k => provinces.get(k).region === r))
-  const noneAdjacent = keys => keys.every(a => keys.every(b => a === b || !adjacency.get(a).has(b)))
-  for (const strict of [true, false]) {
-    for (let i = 0; i < TRIES; i++) {
-      const keys = pick()
-      if (keys.length === n && everyRegion(keys) && (!strict || noneAdjacent(keys))) return keys
-    }
-  }
-  // Vẫn thiếu: cho cả tỉnh kề start vào ứng viên (không bao giờ là chính start)
-  pool = eligible.filter(id => id !== start)
-  return pick()
+  // Không xếp được chuỗi (ít tỉnh có gợi ý): n tỉnh bất kỳ không kề start, thiếu thì cho cả tỉnh kề start
+  return far.length >= n ? shuffled(far) : shuffled(eligible.filter(id => id !== start))
 }
 
 // Thứ tự mảnh ghép hiện cho team: lưu server-side lúc vào câu ghép (st.puzzle.display), client không tự suy ra được.
@@ -148,6 +158,7 @@ export function createTram(ctx) {
       let free = 0
       for (const p of provinces.values()) if (!seen.has(p.id)) free += p.points
       st.stage = 'special'
+      if (st.star === 'armed') st.star = 'ready' // sao chỉ dùng ở trạm tỉnh: bật mà chưa dùng thì giữ lại (hết chỗ dùng)
       st.openedAt = now()
       st.free = free
       if (free) db.prepare('UPDATE teams SET bonus_points = bonus_points + ? WHERE id = ?').run(free, t.id)
@@ -173,13 +184,15 @@ export function createTram(ctx) {
     }
   }
 
-  // Ngôi sao hy vọng: bật / tắt trước khi nhận câu (mỗi trận một lần). Sao chỉ 'used' khi câu được phát (consumeStar)
+  // Ngôi sao hy vọng: bật / tắt trước khi nhận câu (mỗi trận một lần), chỉ ở trạm tỉnh (stage 'map').
+  // Sao chỉ 'used' khi câu tỉnh được phát (consumeStar)
   function armStar(teamId, on, by = null) {
     requireRunning()
     const t = requireTeam(teamId)
     const st = isTram() ? state(t) : null
     if (!st) throw new GameError('not-tram', 'Chỉ có trong phòng Chạy trạm', 409)
     if (st.star === 'used') throw new GameError('star-used', 'Ngôi sao đã dùng rồi', 409)
+    if (st.stage !== 'map') throw new GameError('star-map', 'Ngôi sao hy vọng chỉ dùng ở trạm tỉnh', 409)
     st.star = on ? 'armed' : 'ready'
     save(teamId, st)
     log(teamId, 'tram-star', null, { on: !!on }, by)
@@ -226,7 +239,7 @@ export function createTram(ctx) {
     const qn = content.periods.get(st.period).questions.find(x => x.id === p.id)
     return {
       id: p.id, content: qn.content, options: p.order.map(i => qn.options[i]),
-      issuedAt: p.at, freeUntil: p.at + RULES.answerFreeMs.siege, deadline: p.at + RULES.answerLimitMs.siege, star: p.star,
+      issuedAt: p.at, freeUntil: p.at + RULES.answerFreeMs.siege, deadline: p.at + RULES.answerLimitMs.siege,
       done: st.special.done, of: RULES.tram.specialCount, // test cũ / client đọc tiến độ từ câu
     }
   }
@@ -252,27 +265,24 @@ export function createTram(ctx) {
         const j = Math.floor(random() * (i + 1))
         ;[order[i], order[j]] = [order[j], order[i]]
       }
-      const star = st.star === 'armed' // sao dùng ngay lúc phát câu
-      if (star) st.star = 'used'
       st.special.seen.push(qn.id)
-      st.special.pending = { id: qn.id, order, at: now() + ctx.questionLeadMs, star }
+      st.special.pending = { id: qn.id, order, at: now() + ctx.questionLeadMs }
       save(teamId, st)
       log(teamId, 'tram-special', null, { issued: qn.id }, by)
       return publicSpecial(st)
     })
   }
 
-  // Sai / hết giờ / bỏ qua: khóa 30 giây, câu có sao thì trừ 500. Gọi trong transaction
+  // Sai / hết giờ / bỏ qua: nghỉ chân RULES.tram.lockMs. Gọi trong transaction
   function failSpecial(t, st, by, extra = {}) {
     const p = st.special.pending
     st.special.pending = null
     st.special.lockedUntil = now() + RULES.tram.lockMs
-    if (p.star) db.prepare('UPDATE teams SET bonus_points = bonus_points - ? WHERE id = ?').run(RULES.tram.specialPoints, t.id)
     const ms = Math.max(0, Math.min(now() - p.at, RULES.answerLimitMs.siege))
     db.prepare('UPDATE teams SET answer_ms = answer_ms + ? WHERE id = ?').run(ms, t.id)
     save(t.id, st)
-    log(t.id, 'tram-special', null, { id: p.id, correct: false, star: p.star, ...extra }, by)
-    return { correct: false, ...extra, star: p.star, penalty: p.star ? RULES.tram.specialPoints : 0, lockedUntil: st.special.lockedUntil, stage: st.stage }
+    log(t.id, 'tram-special', null, { id: p.id, correct: false, ...extra }, by)
+    return { correct: false, ...extra, lockedUntil: st.special.lockedUntil, stage: st.stage }
   }
 
   function specialAnswer(teamId, questionId, given, by = null) {
@@ -285,8 +295,7 @@ export function createTram(ctx) {
       if (!Number.isInteger(given) || given < 0 || given >= p.order.length) throw new GameError('bad-answer', 'Đáp án không hợp lệ')
       if (p.order[given] !== qn.answer) return failSpecial(t, st, by)
       const elapsed = Math.max(0, now() - p.at)
-      const base = RULES.tram.specialPoints - timePenaltyOf(RULES.tram.specialPoints, 'siege', elapsed)
-      const points = p.star ? base * 2 : base
+      const points = RULES.tram.specialPoints - timePenaltyOf(RULES.tram.specialPoints, 'siege', elapsed)
       db.prepare('UPDATE teams SET bonus_points = bonus_points + ?, answer_ms = answer_ms + ? WHERE id = ?')
         .run(points, Math.min(elapsed, RULES.answerLimitMs.siege), teamId)
       st.special.pending = null
@@ -296,8 +305,9 @@ export function createTram(ctx) {
         st.puzzle.display = randomDisplay(st.need)
       }
       save(teamId, st)
-      log(teamId, 'tram-special', null, { id: p.id, correct: true, points, star: p.star }, by)
-      return { correct: true, points, correctAnswer: qn.options[qn.answer], explanation: qn.explanation, stage: st.stage }
+      log(teamId, 'tram-special', null, { id: p.id, correct: true, points }, by)
+      // done: tiến độ thật — client gán lại (không tự +1, vì SSE có thể đã mang done mới về trước phản hồi này)
+      return { correct: true, points, correctAnswer: qn.options[qn.answer], explanation: qn.explanation, stage: st.stage, done: st.special.done }
     })
   }
 

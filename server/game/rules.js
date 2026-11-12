@@ -92,7 +92,8 @@ export const RULES = {
   // Số câu phải trả lời đúng ở một tỉnh trống (chủ phòng chọn lúc tạo phòng; 1 = luật gốc). Sai giữa chừng giữ tiến độ
   quizCount: { min: 1, max: 3, default: 1 },
   // Chế độ Chạy trạm (spec 2026-11-09-tram-mode-design.md §3.1); spareHints: cần ≥ keyCount + spareHints tỉnh có gợi ý
-  tram: { keyCount: { min: 3, max: 7, default: 5 }, hintEvery: 3, minDurationMin: 30, specialCount: 3, specialPoints: 500, puzzlePoints: 1000, finishPerMin: 30, lockMs: 30_000, spareHints: 3 },
+  // lockMs: nghỉ chân khi sai / hết giờ / bỏ qua ở mọi chặng Chạy trạm (trạm tỉnh, câu thời kỳ, ghép mảnh) — ngắn hơn phòng team (30 giây)
+  tram: { keyCount: { min: 3, max: 7, default: 5 }, hintEvery: 3, minDurationMin: 30, specialCount: 3, specialPoints: 500, puzzlePoints: 1000, finishPerMin: 30, lockMs: 15_000, spareHints: 3 },
   // Câu hỏi lộ tên tỉnh cũ (trước sáp nhập): phòng tram không phát
   tramExcluded: ['hai-phong-03', 'ninh-binh-04', 'dak-lak-02', 'dong-thap-04', 'can-tho-02', 'can-tho-03'],
 }

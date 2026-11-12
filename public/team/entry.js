@@ -231,6 +231,10 @@ function renderLobby() {
   $('soloNote').textContent = !solo ? ''
     : `Phòng chơi đơn · ${state.lobbyData.players}/${state.lobbyData.maxPlayers} người. Tên của bạn hiện trên màn chiếu (chủ phòng có thể sửa).`
       + (state.lobbyData.preset && !state.lobbyData.hasHost ? ' Phòng chưa có chủ phòng — bạn vào trước sẽ làm chủ phòng: bắt đầu trận, tung sự kiện, sửa tên.' : '')
+  // Phòng tram: không có thưởng "Về quê" (server bỏ qua) → không hỏi quê
+  const tram = state.lobbyData.mode === 'tram'
+  document.querySelector('#joinForm .home-field').hidden = document.querySelector('#joinForm .home-note').hidden = tram
+  if (tram) home.value = ''
   $('homeNoteText').textContent = solo
     ? 'Có tem ở tỉnh quê của bạn được +50 "Về quê". Chỉ bạn thấy quê của mình; không đổi được sau khi trận bắt đầu.'
     : 'Team cắm cờ ở tỉnh quê của bạn được +50 "Về quê" (tối đa 3 tỉnh mỗi team). Chỉ đồng đội thấy quê của bạn; không đổi được sau khi trận bắt đầu.'

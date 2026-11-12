@@ -43,7 +43,7 @@ Lý do: luật hiện tại nhiều (thử tài, cược, thẻ, sự kiện…)
 ### 3.3. Trạm tỉnh
 - Tới tỉnh chưa có điểm → 1 câu hỏi từ kho hiện có (`difficulty: normal`) [Claude: 1 câu/tỉnh].
 - **Điểm theo tốc độ** — cơ chế hiện có (`timePenalty`): 15 giây đầu đủ điểm tỉnh, giây 15→30 giảm đều về 0 [CĐA: giữ như repo].
-- **Sai / hết giờ: không trừ điểm**, khóa 30 giây như hiện tại [CĐA]. Hết khóa có thể "Trả lời lại" tại chỗ (câu khác) hoặc đi tiếp [Claude: giữ nút hiện có].
+- **Sai / hết giờ: không trừ điểm**, nghỉ chân **15 giây** [CĐA, 12/11: 30 giây như phòng team là quá lâu — áp cho mọi chặng Chạy trạm, `RULES.tram.lockMs`]. Hết khóa có thể "Trả lời lại" tại chỗ (câu khác) hoặc đi tiếp [Claude: giữ nút hiện có].
 - "Bỏ qua" giữ như hiện tại (lùi về + khóa) [Claude].
 - Trả lời đúng ở tỉnh từng sai → nhận điểm bình thường (tỉnh không còn là "đã ghé mà không có điểm") [Claude].
 
@@ -52,7 +52,8 @@ Lý do: luật hiện tại nhiều (thử tài, cược, thẻ, sự kiện…)
 - **Bỏ qua** khi câu đang có ngôi sao = tính như **sai** (bị trừ, ngôi sao đã dùng) — tránh lách luật bật sao rồi bỏ qua câu khó [Claude].
 - Dùng được ở trạm tỉnh **và** ở câu hỏi map đặc biệt [Claude] (không dùng cho câu ghép mảnh).
 - Đúng → điểm câu đó **×2** (sau khi trừ theo tốc độ) [CĐA ×2; Claude: nhân sau khi trừ].
-- Sai / hết giờ → **bị trừ** điểm gốc của câu đó (tỉnh: điểm tỉnh; map đặc biệt: điểm câu) [CĐA]. Vẫn khóa 30 giây.
+- Sai / hết giờ → **bị trừ** điểm gốc của câu đó (điểm tỉnh) [CĐA]. Vẫn nghỉ chân như câu sai.
+- Chỉ dùng ở **trạm tỉnh**, không dùng ở map đặc biệt [CĐA, 12/11]. Đang bật mà mở map đặc biệt thì sao về lại chưa dùng.
 
 ### 3.5. Key và gợi ý
 - Đầu trận, server rải **N key** (mặc định 5) cho **từng team riêng**, vị trí random mỗi trận [CĐA]. Ràng buộc [Claude]: không ở tỉnh xuất phát và các tỉnh kề nó; mỗi miền ít nhất 1 key; hai key không kề nhau.
@@ -63,17 +64,17 @@ Lý do: luật hiện tại nhiều (thử tài, cược, thẻ, sự kiện…)
 - Các gợi ý đã nhận hiện trong một **sổ gợi ý** trên màn team (mọi thành viên thấy) [Claude].
 - **Nhặt key**: tới tỉnh giữ key và **trả lời đúng** câu của tỉnh đó [CĐA]. Tình cờ ghé đúng tỉnh có key (chưa có gợi ý) và trả lời đúng → cũng nhặt được [Claude]. Sai → khóa, "Trả lời lại" để thử tiếp.
 - Mỗi key nhặt được lộ ra **1 mảnh ghép** của câu đố cuối (xem 3.6) [CĐA chọn ý "mảnh ghép"]. Server gán key → mảnh **ngẫu nhiên** lúc rải key; client chỉ nhận chữ của mảnh, không kèm vị trí (thứ tự nhặt không được trùng lời giải) [Claude].
-- **Rải key** [Claude]: chỉ ở tỉnh có ≥ 1 câu đố gợi ý đã duyệt. Không thỏa ràng buộc thì nới theo thứ tự: bỏ "hai key không kề" → bỏ "mỗi miền ≥ 1". Số tỉnh có gợi ý đã duyệt < N + 3 → **không cho tạo phòng Chạy trạm** với N đó, báo rõ cho chủ phòng.
+- **Rải key** [Claude, sửa 12/11 sau khi CĐA chơi thử: luật cũ "mỗi miền ≥ 1 key" bắt chạy dọc đất nước ~20 bước cho 5 key, quá lâu]: chỉ ở tỉnh có ≥ 1 câu đố gợi ý đã duyệt, không phải tỉnh xuất phát / tỉnh kề, không hai key kề nhau. Rải theo **chuỗi**: key đầu cách tỉnh xuất phát đúng 2 bước, mỗi key sau cách key trước đúng 2 bước → đường đi ngắn nhất qua mọi key ≤ 2N bước, như nhau cho mọi team. Bí đường thì nới bước nhảy 2 → 2–3 → 2–4 → N tỉnh bất kỳ. Số tỉnh có gợi ý đã duyệt < N + 3 → **không cho tạo phòng Chạy trạm** với N đó, báo rõ cho chủ phòng.
 
 ### 3.6. Map đặc biệt
 - Mỗi team được gán **1 thời kỳ lịch sử random** lúc bắt đầu trận, giữ kín (server không gửi tên) cho tới khi mở map [Claude]. Hai team có thể trùng thời kỳ [Claude].
 - Gom đủ key → mở **map đặc biệt riêng** của team: khung cảnh thời kỳ đó [CĐA].
 - **Ngay lúc mở map**: cộng **điểm tỉnh của mọi tỉnh chưa đặt chân tới** [CĐA]. Tỉnh **đã ghé mà không có điểm** (sai, hết giờ, bỏ qua, bỏ đi) → **mất** điểm tỉnh đó [CĐA] — nghĩa là **không được cộng (0), không bị trừ âm** [Claude hiểu theo CĐA]. "Đã ghé" = tỉnh team từng đặt chân tới (đã được phát câu / khung chọn), không tính tỉnh chỉ nhìn thấy qua sương mù. Không đi lại trên bản đồ sau khi mở map [Claude].
-- Trả lời **3 câu** về thời kỳ đó [CĐA], lần lượt. Điểm mỗi câu **500** (tỉnh cao nhất 300) [Claude: "lớn hơn nhiều" theo CĐA]. Giờ trả lời và trừ theo tốc độ như câu thử tài hiện có: 45 giây, 20 giây đầu đủ điểm [Claude]. Sai / hết giờ → khóa 30 giây rồi câu khác cùng thời kỳ; không trừ điểm (trừ khi dùng ngôi sao) [Claude].
-- Đúng đủ 3 câu → **câu đố ghép mảnh**: các mảnh từ key (N mảnh) hiện xáo trộn, team sắp lại đúng thứ tự để ra một câu / cụm từ về thời kỳ đó [CĐA ý 1]. Đúng → **+1000** [Claude] và **thưởng về đích sớm = số phút còn lại × 30** (làm tròn xuống theo phút, tính lúc giải xong câu ghép) [CĐA đồng ý công thức], team **về đích**. Sai → khóa 30 giây, sắp lại; không giới hạn lần [Claude]. Không tính giờ / không trừ theo tốc độ cho câu ghép [Claude].
+- Trả lời **3 câu** về thời kỳ đó [CĐA], lần lượt. Điểm mỗi câu **500** (tỉnh cao nhất 300) [Claude: "lớn hơn nhiều" theo CĐA]. Giờ trả lời và trừ theo tốc độ như câu thử tài hiện có: 45 giây, 20 giây đầu đủ điểm [Claude]. Sai / hết giờ → nghỉ chân 15 giây rồi câu khác cùng thời kỳ; không trừ điểm [Claude].
+- Đúng đủ 3 câu → **câu đố ghép mảnh**: các mảnh từ key (N mảnh) hiện xáo trộn, team sắp lại đúng thứ tự để ra một câu / cụm từ về thời kỳ đó [CĐA ý 1]. Đúng → **+1000** [Claude] và **thưởng về đích sớm = số phút còn lại × 30** (làm tròn xuống theo phút, tính lúc giải xong câu ghép) [CĐA đồng ý công thức], team **về đích**. Sai → nghỉ chân 15 giây, sắp lại; không giới hạn lần [Claude]. Không tính giờ / không trừ theo tốc độ cho câu ghép [Claude].
 - Mảnh ghép lộ dần từ đầu (theo từng key) nên team có thể đoán thời kỳ trước khi vào map — chấp nhận, coi là phần vui [Claude].
 - Về đích → chờ hết trận; bảng điểm hiện trạng thái "Đã về đích" [Claude].
-- Ở map đặc biệt, "Bỏ qua" = tính như sai (khóa 30 giây, câu khác), không có lùi về [Claude].
+- Ở map đặc biệt, "Bỏ qua" = tính như sai (nghỉ chân 15 giây, câu khác), không có lùi về [Claude].
 - Câu ghép nhiều người một team: mỗi người sắp trên máy mình, ai bấm "Chốt" thì nộp thứ tự của người đó (giống câu tự điền), không dùng trạng thái kéo-thả chung. Giao diện **bấm lần lượt** từng mảnh (không kéo-thả) cho chắc trên điện thoại [Claude].
 - Câu ghép lưu sẵn **cách chia cho từng N (3–7)** trong dữ liệu; không tự gộp mảnh lúc chạy [Claude].
 - Khoảnh khắc nhặt key cuối: client diễn xong hiệu ứng kết quả ("Chính xác" + key + mảnh) rồi mới chuyển sang màn map đặc biệt (tránh lỗi cũ SSE đóng khung sớm) [Claude].

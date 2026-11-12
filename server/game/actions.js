@@ -462,7 +462,7 @@ export function createActions(ctx) {
       return result
     }
     // Câu vàng: khóa ×2; "Liều": khóa thêm 30 giây
-    const lockMs = (isSiege ? RULES.lockSiegeWrongMs : RULES.lockWrongMs) * (t.pending_golden ? RULES.goldenLockFactor : 1)
+    const lockMs = (isSiege ? RULES.lockSiegeWrongMs : isTram() ? RULES.tram.lockMs : RULES.lockWrongMs) * (t.pending_golden ? RULES.goldenLockFactor : 1)
       + (t.pending_bet && !isTram() ? RULES.betExtraLockMs : 0)
     db.prepare('UPDATE teams SET pending_question = NULL, pending_order = NULL, pending_at = NULL, locked_until = ?, streak = 0 WHERE id = ?')
       .run(now() + lockMs, t.id)
@@ -616,7 +616,7 @@ export function createActions(ctx) {
   // Khóa khi bỏ qua: 10 giây + thời gian đã xem câu hỏi, tối đa bằng khóa khi trả lời sai —
   // để chờ tới gần hết giờ mới bỏ qua không có lợi hơn để hết giờ
   function skipLockMs(difficulty, elapsedMs) {
-    const cap = difficulty === 'siege' ? RULES.lockSiegeWrongMs : RULES.lockWrongMs
+    const cap = difficulty === 'siege' ? RULES.lockSiegeWrongMs : isTram() ? RULES.tram.lockMs : RULES.lockWrongMs
     return Math.min(cap, RULES.lockSkipMs + Math.max(0, elapsedMs))
   }
 

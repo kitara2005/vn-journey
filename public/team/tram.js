@@ -17,7 +17,10 @@ const STAR_HINT = {
   ready: 'Câu tới: đúng thì được ×2 điểm tỉnh, sai thì bị trừ điểm tỉnh. Mỗi trận một lần.',
   armed: 'Đã bật: câu hỏi kế tiếp mang ngôi sao. Bấm lại để tắt.',
   used: 'Ngôi sao đã dùng rồi.',
+  off: 'Ngôi sao hy vọng chỉ dùng ở trạm tỉnh — map đặc biệt không dùng được.',
 }
+// Trạng thái hiện cho nút / ghi chú: qua map đặc biệt mà chưa dùng sao thì 'off'
+const starView = tr => (tr.star !== 'used' && tr.stage !== 'map' ? 'off' : tr.star)
 
 // Hộp xác nhận tự vẽ (không dùng confirm())
 function askStar() {
@@ -41,6 +44,7 @@ function setStar(on) {
       renderAll()
     } catch (err) {
       if (err.code === 'star-used' && state.me?.tram) { state.me.tram.star = 'used'; closeDialog(); renderAll() }
+      if (err.code === 'star-map') { closeDialog(); renderAll() }
       throw err
     }
   })
@@ -51,8 +55,8 @@ function starButton(tr) {
     type: 'button',
     class: `btn star-btn ${tr.star}`,
     'aria-pressed': String(tr.star === 'armed'),
-    title: STAR_HINT[tr.star],
-    disabled: tr.star === 'used' || state.busy || !running() || hasPending(),
+    title: STAR_HINT[starView(tr)],
+    disabled: starView(tr) !== tr.star || tr.star === 'used' || state.busy || !running() || hasPending(),
     onclick: () => (tr.star === 'armed' ? setStar(false) : askStar()),
   }, labeled('star-hope', tr.star === 'armed' ? 'Ngôi sao: đang bật' : tr.star === 'used' ? 'Ngôi sao đã dùng' : 'Ngôi sao hy vọng'))
   return b
@@ -67,7 +71,7 @@ function trayCard(tr) {
     el('h2', {}, labeled('key', `Key đã nhặt `), el('span', { class: 'muted' }, `${tr.found}/${tr.need}`)),
     el('ul', { class: 'key-tray' }, ...slots),
     el('div', { class: 'btn-row' }, starButton(tr)),
-    el('p', { class: 'muted star-note' }, STAR_HINT[tr.star]),
+    el('p', { class: 'muted star-note' }, STAR_HINT[starView(tr)]),
   ]
 }
 

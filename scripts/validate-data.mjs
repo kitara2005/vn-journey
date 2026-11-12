@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalizeText } from '../server/game/rules.js'
+import { ICON_NAMES } from '../public/shared/icons.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const readJson = name => JSON.parse(readFileSync(join(ROOT, 'data', name), 'utf8'))
@@ -152,6 +153,7 @@ for (const p of periods) {
   for (const f of ['id', 'name', 'years']) if (!p[f]) err(`${where}: thiếu ${f}`)
   const sc = p.scene
   if (!sc || !sc.color || !sc.blurb || !Array.isArray(sc.icons) || sc.icons.length !== 3) err(`${where}: scene cần color, blurb và 3 icons`)
+  else for (const n of sc.icons) if (!ICON_NAMES.includes(n)) err(`${where}: icon "${n}" chưa có trong public/shared/icons.js`)
   if (!Array.isArray(p.questions) || !p.questions.length) err(`${where}: thiếu questions`)
   for (const q of p.questions ?? []) {
     const w = `${where} câu ${q.id}`

@@ -13,12 +13,12 @@ import { toast } from './notify.js'
 import { now, state } from './state.js'
 
 const POINTS = 500 // điểm câu thời kỳ (RULES.tram.specialPoints), dùng để hiện "còn bao nhiêu điểm"
+const LOCK_S = 15 // nghỉ chân khi sai / hết giờ / bỏ qua (RULES.tram.lockMs)
 const HOLD_MS = 5000 // chờ tối đa chừng này cho khung kết quả / câu cũ trước khi chuyển sang map đặc biệt
 const EXPIRE_GRACE_MS = 2500 // quá hạn chừng này mà câu còn treo thì tự bỏ qua để sang câu khác
 
-// Tên icon trong nội dung → icon có sẵn; tên lạ thì dùng icon cuộn giấy (không để lỗi)
-const ALIAS = { 'nón': 'hat' }
-const sceneIcon = name => (ICON_NAMES.includes(ALIAS[name] ?? name) ? ALIAS[name] ?? name : 'scroll')
+// Tên icon lạ thì dùng icon cuộn giấy (không để lỗi); data:check đã báo tên thiếu từ trước
+const sceneIcon = name => (ICON_NAMES.includes(name) ? name : 'scroll')
 
 // Trạng thái cục bộ
 const L = {
@@ -93,7 +93,7 @@ function sceneHead(tr) {
 }
 
 function pointsLeft(q, at) {
-  const base = POINTS * (q.star ? 2 : 1)
+  const base = POINTS
   if (at <= q.freeUntil) return base
   return base - Math.round(base * Math.min(1, (at - q.freeUntil) / (q.deadline - q.freeUntil)))
 }
@@ -109,8 +109,7 @@ function questionPanel(tr, q) {
   const armed = L.skipArmedAt && now() - L.skipArmedAt < 3000
   return el('section', { class: 'ts-panel' },
     el('div', { class: 'q-head' },
-      el('h3', {}, `Câu ${tr.special.done + 1}/${tr.special.of} của thời kỳ`),
-      q.star ? el('span', { class: 'tag bet' }, labeled('star-hope', 'Ngôi sao hy vọng: ×2')) : ''),
+      el('h3', {}, `Câu ${tr.special.done + 1}/${tr.special.of} của thời kỳ`)),
     el('p', { class: 'ts-q' }, q.content),
     el('div', { class: 'options' }, ...opts),
     el('div', { class: 'q-foot' },
@@ -118,7 +117,7 @@ function questionPanel(tr, q) {
       el('div', { class: 'dialog-actions' },
         button(armed ? 'Bấm lại để bỏ qua' : 'Bỏ qua', '', skip, { disabled: L.sending || expired || state.busy }),
         button('Chốt', 'green commit', () => submitAnswer(q), { disabled: L.pick == null || L.sending || expired || state.busy }))),
-    el('p', { class: 'muted ts-note' }, 'Cả đội dùng chung một câu: ai chốt trước thì tính cho cả đội. Sai, hết giờ hoặc bỏ qua: nghỉ 30 giây.'))
+    el('p', { class: 'muted ts-note' }, `Cả đội dùng chung một câu: ai chốt trước thì tính cho cả đội. Sai, hết giờ hoặc bỏ qua: nghỉ ${LOCK_S} giây.`))
 }
 
 function resultPanel(tr) {
@@ -139,7 +138,7 @@ function resultPanel(tr) {
   }
   return el('section', { class: 'ts-panel warn' },
     el('h3', {}, r.timedOut ? 'Hết giờ' : r.skipped ? 'Đã bỏ qua' : 'Chưa đúng'),
-    el('p', { class: 'explain' }, `Cả đội nghỉ 30 giây rồi nhận câu khác.${r.penalty ? ` Sao hy vọng không thành: bị trừ ${r.penalty} điểm.` : ''}`),
+    el('p', { class: 'explain' }, `Cả đội nghỉ ${LOCK_S} giây rồi nhận câu khác.`),
     el('p', { class: 'ts-lock', id: 'tsLock' }),
     el('div', { class: 'dialog-actions' }, button('Nhận câu hỏi', 'green', () => { L.result = null; L.v++; sync(true) }, { disabled: lockOf(tr) > now() })))
 }
@@ -299,14 +298,13 @@ function afterAnswer(r) {
   if (r.correct) {
     sound.correct()
     tr.special.pending = null
-    tr.special.done += 1
+    tr.special.done = r.done ?? tr.special.done + 1 // SSE có thể đã cập nhật trước phản hồi → không cộng hai lần
   } else {
     sound.wrong()
     L.lockUntil = r.lockedUntil ?? 0
     tr.special.pending = null
     if (r.lockedUntil) tr.special.lockedUntil = r.lockedUntil
-    const lost = r.penalty ? ` — bị trừ ${r.penalty} điểm (sao hy vọng)` : ''
-    toast((r.timedOut ? 'Hết giờ — tính là trả lời sai' : r.skipped ? 'Đã bỏ qua — cả đội nghỉ 30 giây' : 'Chưa đúng — cả đội nghỉ 30 giây') + lost, true, r.timedOut ? 'timer' : '')
+    toast((r.timedOut ? 'Hết giờ — tính là trả lời sai' : r.skipped ? `Đã bỏ qua — cả đội nghỉ ${LOCK_S} giây` : `Chưa đúng — cả đội nghỉ ${LOCK_S} giây`), true, r.timedOut ? 'timer' : '')
   }
   if (r.stage && r.stage !== tr.stage) { tr.stage = r.stage; if (r.stage === 'puzzle') tr.puzzle ??= { pieces: [], lockedUntil: null } }
   L.v++
@@ -350,7 +348,7 @@ function submitPuzzle() {
       } else {
         sound.wrong()
         L.pLock = r.lockedUntil ?? 0
-        L.pMsg = 'Chưa đúng — thử sắp lại thứ tự. Cả đội nghỉ 30 giây trước khi chốt tiếp.'
+        L.pMsg = `Chưa đúng — thử sắp lại thứ tự. Cả đội nghỉ ${LOCK_S} giây trước khi chốt tiếp.`
         const row = $('tsRow')
         if (row && !fx.reducedMotion) fx.shakeX(row)
       }

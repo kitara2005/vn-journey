@@ -192,6 +192,13 @@ export function renderSide() {
   $('reachTitle').replaceChildren(state.me.marchReady
     ? labeled('march', 'Xe tốc hành: lượt này đi xa được 2 tỉnh')
     : 'Có thể đi (bấm tỉnh viền đậm trên bản đồ):')
+  // Phòng tram đã mở map đặc biệt / câu ghép / về đích: không còn đi tỉnh
+  const tst = tram() ? state.me.tram?.stage : null
+  if (tst && tst !== 'map') {
+    $('reachTitle').textContent = tst === 'done' ? 'Team đã về đích' : 'Team đang ở map đặc biệt — không đi tỉnh nữa'
+    $('neighbors').replaceChildren()
+    return renderCards()
+  }
   if (hasPending() && state.me.siegeBet && !state.me.pendingQuestion) {
     // Vừa bấm Thử tài: đang cược số hiệp
     $('reachTitle').textContent = `${solo() ? 'Bạn' : 'Team'} đang cược số hiệp thử tài ở ${nameOf(state.me.siegeBet.province)}`

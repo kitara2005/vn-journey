@@ -30,7 +30,7 @@ function makePeriod(id, name, years) {
   }
   return {
     id, name, years,
-    scene: { color: '#8a6d3b', icons: ['trống', 'thuyền', 'nón'], blurb: `Bối cảnh ${name}.` },
+    scene: { color: '#8a6d3b', icons: ['trong-dong', 'nha-san', 'chim-lac'], blurb: `Bối cảnh ${name}.` },
     questions,
     puzzle: { text, explanation: `Giải thích ghép ${name}.`, sources: SOURCES, splits },
   }
