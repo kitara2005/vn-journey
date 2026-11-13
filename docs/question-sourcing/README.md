@@ -33,3 +33,13 @@ Lượt bù thứ hai: 2 trợ lý soạn 9 câu cho 8 tỉnh còn thiếu → F
 Tổng đợt 4: **+173 câu** (140 câu mức 3, còn lại Fable thấy dễ → mức 2). Cả 34 tỉnh có ≥ 5 câu mới (Lai Châu, Sơn La, Ninh Bình 6).
 
 **Còn lại:** các câu cũ dạng "… của dân tộc nào?" (đáp án Khmer, Nùng, Thái…) bị nhiều câu khác nêu tên dân tộc trong đề → nên viết lại các câu cũ đó.
+
+## Đợt 5 (13/11/2026) — viết lại 23 câu cũ bị lộ đáp án
+
+Dò tự động: đáp án câu A xuất hiện trong `content` của câu khác cùng tỉnh. Hai dạng lộ nặng nhất được viết lại (giữ `id`, `difficulty`, thường giữ chủ đề nhưng hỏi góc khác):
+- 11 câu "… vốn thuộc tỉnh cũ nào?" (nội dung sáp nhập, giờ bị cấm; tên tỉnh cũ có trong 8–13 câu khác cùng tỉnh): hai-phong-03, ninh-binh-04, ninh-binh-s2, gia-lai-s2, dak-lak-02, dong-thap-04, vinh-long-s2, can-tho-02, can-tho-03, lam-dong-04, an-giang-04.
+- 12 câu "… của dân tộc nào?": lai-chau-s2, lang-son-08, lang-son-s6, phu-tho-04, nghe-an-10, khanh-hoa-03, khanh-hoa-s1, vinh-long-02, an-giang-02, can-tho-04, dong-nai-s2, ninh-binh-14.
+
+Mỗi câu mới có ≥ 2 nguồn (≥ 1 chính thống), Fable lọc (chủ yếu thay phương án sai chưa chắc sai, sửa lời giải cho khớp nguồn). 19 câu trong số này vốn chưa có nguồn → `legacyUnsourced` còn 185.
+
+**Còn lại:** các câu dễ bị lộ bởi tên địa danh trong câu khác (vd. cao-bang-01 Thác Bản Giốc, son-la-02 Mộc Châu, hung-yen-02 Phố Hiến, da-nang-02 Hội An, tay-ninh-04 Cao Đài, can-tho-01 Cái Răng, an-giang-03 Núi Sam) — phần lớn là câu mức Dễ, ít ảnh hưởng.
