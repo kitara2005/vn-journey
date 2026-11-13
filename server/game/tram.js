@@ -239,7 +239,7 @@ export function createTram(ctx) {
     const qn = content.periods.get(st.period).questions.find(x => x.id === p.id)
     return {
       id: p.id, content: qn.content, options: p.order.map(i => qn.options[i]),
-      issuedAt: p.at, freeUntil: p.at + RULES.answerFreeMs.siege, deadline: p.at + RULES.answerLimitMs.siege,
+      issuedAt: p.at, freeUntil: p.at + RULES.answerFreeMs.tram, deadline: p.at + RULES.answerLimitMs.tram,
       done: st.special.done, of: RULES.tram.specialCount, // test cũ / client đọc tiến độ từ câu
     }
   }
@@ -250,7 +250,7 @@ export function createTram(ctx) {
       const p = st.special.pending
       if (p) {
         // Câu chờ đã quá hạn (client không tự bỏ qua kịp): xử như hết giờ rồi báo khóa, không trả câu cũ
-        if (now() > p.at + RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs) {
+        if (now() > p.at + RULES.answerLimitMs.tram + RULES.answerNetworkGraceMs) {
           return failSpecial(t, st, by, { timedOut: true }) // trả trạng thái khóa (không ném lỗi: ném sẽ hoàn tác việc xử lý)
         }
         return publicSpecial(st) // đã có câu chờ: trả lại câu đó
@@ -278,7 +278,7 @@ export function createTram(ctx) {
     const p = st.special.pending
     st.special.pending = null
     st.special.lockedUntil = now() + RULES.tram.lockMs
-    const ms = Math.max(0, Math.min(now() - p.at, RULES.answerLimitMs.siege))
+    const ms = Math.max(0, Math.min(now() - p.at, RULES.answerLimitMs.tram))
     db.prepare('UPDATE teams SET answer_ms = answer_ms + ? WHERE id = ?').run(ms, t.id)
     save(t.id, st)
     log(t.id, 'tram-special', null, { id: p.id, correct: false, ...extra }, by)
@@ -291,13 +291,13 @@ export function createTram(ctx) {
       const p = st.special.pending
       if (!p || p.id !== questionId) throw new GameError('no-pending', 'Không có câu hỏi đang chờ', 409)
       const qn = content.periods.get(st.period).questions.find(x => x.id === p.id)
-      if (now() > p.at + RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs) return failSpecial(t, st, by, { timedOut: true })
+      if (now() > p.at + RULES.answerLimitMs.tram + RULES.answerNetworkGraceMs) return failSpecial(t, st, by, { timedOut: true })
       if (!Number.isInteger(given) || given < 0 || given >= p.order.length) throw new GameError('bad-answer', 'Đáp án không hợp lệ')
       if (p.order[given] !== qn.answer) return failSpecial(t, st, by)
       const elapsed = Math.max(0, now() - p.at)
-      const points = RULES.tram.specialPoints - timePenaltyOf(RULES.tram.specialPoints, 'siege', elapsed)
+      const points = RULES.tram.specialPoints - timePenaltyOf(RULES.tram.specialPoints, 'tram', elapsed)
       db.prepare('UPDATE teams SET bonus_points = bonus_points + ?, answer_ms = answer_ms + ? WHERE id = ?')
-        .run(points, Math.min(elapsed, RULES.answerLimitMs.siege), teamId)
+        .run(points, Math.min(elapsed, RULES.answerLimitMs.tram), teamId)
       st.special.pending = null
       st.special.done += 1
       if (st.special.done >= RULES.tram.specialCount) {

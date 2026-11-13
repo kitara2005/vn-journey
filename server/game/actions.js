@@ -2,7 +2,7 @@
 // bỏ phiếu + trả lời (chuỗi đúng, câu vàng, siêu tốc), phòng thủ, bỏ qua, dùng thẻ.
 
 import { transaction } from '../db.js'
-import { RULES, REGIONS, CARD_KINDS, SOLO_CARD_KINDS, HELP_CARDS, GameError, timePenaltyOf } from './rules.js'
+import { RULES, REGIONS, CARD_KINDS, SOLO_CARD_KINDS, HELP_CARDS, GameError, timePenaltyOf, timeKey } from './rules.js'
 
 export function createActions(ctx) {
   const {
@@ -415,7 +415,7 @@ export function createActions(ctx) {
 
   // Điểm bị trừ theo thời gian trả lời (trừ vào điểm thưởng, một lần, lúc chiếm được tỉnh).
   // extraMs: thẻ Thêm giờ — dời cả khoảng được đủ điểm lẫn hạn chót
-  const timePenalty = timePenaltyOf
+  const timePenalty = (points, difficulty, elapsedMs, extraMs) => timePenaltyOf(points, timeKey(difficulty, isTram() ? 'tram' : null), elapsedMs, extraMs)
 
   // Chuỗi đúng: cứ RULES.streakEvery câu đúng liên tiếp → 1 thẻ trợ giúp ngẫu nhiên; khay đã đầy thì điểm thưởng thay thẻ.
   // Gọi trong transaction (sau khi chiếm tỉnh — thẻ rơi từ thành phố đã nằm trong khay). Trả về { n, card, bonus }.

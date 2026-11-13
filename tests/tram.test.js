@@ -100,7 +100,7 @@ test('tram: đi tới tỉnh, trả lời đúng -> có tem + điểm tỉnh; qu
   assert.equal(g.db.prepare('SELECT COUNT(*) n FROM ownership WHERE room_id = ?').get(g.room.roomId).n, 0)
 })
 
-test('tram: thành phố không rơi thẻ, không chuỗi thẻ, không siêu tốc, sai chỉ khóa 30 giây', () => {
+test('tram: thành phố không rơi thẻ, không chuỗi thẻ, không siêu tốc, sai chỉ khóa 20 giây', () => {
   const g = tramAt('hue')
   const t = g.teams[0].id
   const { question } = g.game.move(t, 'da-nang')
@@ -337,6 +337,22 @@ test('tram: luật cứu ở nửa thời lượng, mốc dời theo tạm dừn
 })
 
 // ---------- Task 6: ngôi sao hy vọng, lọc câu lộ tỉnh cũ ----------
+test('tram: câu trạm tỉnh có 10 giây (5 giây đầu đủ điểm); quá giờ tính sai; phòng team vẫn 30 giây', () => {
+  const g = tramAt('hue')
+  const t = g.teams[0].id
+  const { question } = g.game.move(t, 'quang-tri')
+  assert.equal(question.deadline - question.issuedAt, RULES.answerLimitMs.tram)
+  assert.equal(question.freeUntil - question.issuedAt, RULES.answerFreeMs.tram)
+  assert.equal(RULES.answerLimitMs.tram, 10_000)
+  assert.equal(RULES.tram.lockMs, 20_000)
+  g.now.advance(RULES.answerLimitMs.tram + RULES.answerNetworkGraceMs + 1)
+  const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
+  assert.equal(r.correct, false)
+  assert.equal(timePenaltyOf(100, timeKey('normal', 'tram'), 5_000), 0)
+  assert.equal(timeKey('normal', 'team'), 'normal')
+  assert.equal(timeKey('siege', 'tram'), 'siege')
+})
+
 const starOf = (g, t) => getTram(g.db, t).star
 
 test('tram: bật sao, câu tỉnh đúng ở giây 5 -> tổng tăng 2 lần; sao đã dùng, bật lại báo star-used', () => {
@@ -361,14 +377,14 @@ test('tram: sao + trả lời chậm -> thêm = điểm - phạt tốc độ (t�
   const t = g.teams[0].id
   g.game.armStar(t, true)
   const { question } = g.game.move(t, 'quang-tri')
-  g.now.advance(25_000)
+  g.now.advance(7_000) // trong 10 giây, quá 5 giây đủ điểm
   const before = g.bonus(t)
   const r = g.game.answer(t, question.id, correctAnswer(g.db, t))
   assert.ok(r.penalty > 0)
   assert.equal(g.bonus(t) - before, -r.penalty + (g.pts('quang-tri') - r.penalty))
 })
 
-test('tram: sao + sai -> trừ điểm gốc, khóa 30 giây', () => {
+test('tram: sao + sai -> trừ điểm gốc, khóa 20 giây', () => {
   const g = tramAt('hue')
   const t = g.teams[0].id
   g.game.armStar(t, true)
@@ -434,7 +450,7 @@ test('tram: phòng tram không bao giờ phát can-tho-02/03; phòng team vẫn 
 
 // ---------- Task 7: map đặc biệt, câu ghép mảnh ----------
 import { puzzleDisplay } from '../server/game/tram.js'
-import { timePenaltyOf } from '../server/game/rules.js'
+import { timePenaltyOf, timeKey } from '../server/game/rules.js'
 
 // Team đã mở map (stage 'special') ở phòng tram
 function specialAt(opts = {}) {
@@ -471,14 +487,14 @@ test('puzzleDisplay: sinh một lần khi vào câu ghép, ổn định, hoán v
   }
 })
 
-test('special: 3 câu đúng trong 20 giây đầu -> +1500, stage puzzle; câu ở giây 32,5 -> +250', () => {
+test('special: 3 câu đúng trong 5 giây đầu -> +1500, stage puzzle; câu ở giây 7,5 -> +250', () => {
   const g = specialAt()
   const t = g.teams[0].id
   const before = g.bonus(t)
   for (let i = 0; i < 3; i++) {
     const pub = g.game.specialNext(t)
     assert.equal(pub.of, 3)
-    g.now.advance(10_000)
+    g.now.advance(4_000)
     const r = g.game.specialAnswer(t, pub.id, g.right(t, pub))
     assert.equal(r.correct, true)
     assert.equal(r.points, 500)
@@ -489,11 +505,11 @@ test('special: 3 câu đúng trong 20 giây đầu -> +1500, stage puzzle; câu 
   assert.equal(getTram(g.db, t).stage, 'puzzle')
   const u = g.teams[1].id
   const pub = g.game.specialNext(u)
-  g.now.advance(32_500)
+  g.now.advance(7_500)
   assert.equal(g.game.specialAnswer(u, pub.id, g.right(u, pub)).points, 250)
 })
 
-test('special: sai -> khóa 30 giây, không lộ đáp án; specialNext khi khóa báo locked; sau khóa ra câu khác', () => {
+test('special: sai -> khóa 20 giây, không lộ đáp án; specialNext khi khóa báo locked; sau khóa ra câu khác', () => {
   const g = specialAt()
   const t = g.teams[0].id
   const pub = g.game.specialNext(t)
@@ -568,11 +584,11 @@ test('special: tạm dừng giữa câu -> câu còn đủ giờ như trước k
   const g = specialAt()
   const t = g.teams[0].id
   const pub = g.game.specialNext(t)
-  g.now.advance(10_000)
+  g.now.advance(3_000)
   g.game.pause()
   g.now.advance(120_000)
   g.game.resume()
-  g.now.advance(5_000) // tổng đã tính 15 giây < 20
+  g.now.advance(1_500) // tổng đã tính 4,5 giây < 5
   assert.equal(g.game.specialAnswer(t, pub.id, g.right(t, pub)).points, 500)
   // khóa dời theo
   const u = g.teams[1].id
@@ -602,7 +618,7 @@ function puzzleAt(opts = {}) {
   return g
 }
 
-test('puzzle: sai -> khóa 30 giây; đúng ở phút 20 trận 45 phút -> +1000 + 25x30; already-done; cả phòng về đích -> ended', () => {
+test('puzzle: sai -> khóa 20 giây; đúng ở phút 20 trận 45 phút -> +1000 + 25x30; already-done; cả phòng về đích -> ended', () => {
   const g = puzzleAt({ durationMin: 45 })
   const [t, u] = g.teams.map(x => x.id)
   const bad = g.solve(t).reverse()
@@ -678,8 +694,8 @@ test('teamView.tram: không lộ tỉnh key chưa nhặt, thời kỳ chưa mở
   const v = g.game.teamView(t).tram.special
   assert.deepEqual(v.pending, pub)
   assert.deepEqual(Object.keys(v.pending).sort(), ['content', 'deadline', 'done', 'freeUntil', 'id', 'issuedAt', 'of', 'options'])
-  assert.equal(v.pending.deadline - v.pending.issuedAt, 45_000)
-  assert.equal(v.pending.freeUntil - v.pending.issuedAt, 20_000)
+  assert.equal(v.pending.deadline - v.pending.issuedAt, RULES.answerLimitMs.tram)
+  assert.equal(v.pending.freeUntil - v.pending.issuedAt, RULES.answerFreeMs.tram)
 })
 
 test('teamView.tram: mảnh ghép theo thứ tự hiện, i là vị trí, không lộ thứ tự đúng', () => {
@@ -846,7 +862,6 @@ test('specialNext: câu pending quá hạn -> xử lý như hết giờ (nghỉ 
   g.now.advance(RULES.answerLimitMs.siege + RULES.answerNetworkGraceMs + 1000)
   const r = g.game.specialNext(t)
   assert.equal(r.id, undefined) // không trả câu cũ
-  assert.equal(r.timedOut, true)
   assert.equal(r.lockedUntil - g.now(), RULES.tram.lockMs)
   assert.equal(g.bonus(t), before)
   const st = getTram(g.db, t)

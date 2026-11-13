@@ -1,6 +1,6 @@
 // Câu hỏi của một phòng: chọn câu, ẩn đáp án, phát câu, chấm đáp án, ghi thời gian và kết quả.
 
-import { RULES, GameError, normalizeText } from './rules.js'
+import { RULES, GameError, normalizeText, timeKey } from './rules.js'
 
 export function createQuestions(ctx) {
   const { db, q, now, random, json, activeEvent, roomId, factPool, isSolo, isTram, tram, questionLeadMs } = ctx
@@ -64,6 +64,8 @@ export function createQuestions(ctx) {
     return q.question.get(best[Math.floor(random() * best.length)].id)
   }
 
+  const timeOf = difficulty => timeKey(difficulty, isTram() ? 'tram' : null) // khóa giờ trả lời theo kiểu phòng
+
   // Câu hỏi gửi cho client: KHÔNG có đáp án; lựa chọn đã xáo trộn.
   // help: { hidden (vị trí 2 đáp án sai thẻ 50:50 đã ẩn), extraMs (thẻ Thêm giờ), golden (Câu hỏi vàng) }
   // bet: team chọn "Liều"; votes: phiếu chọn đáp án của thành viên [{ name, answer }]
@@ -71,8 +73,8 @@ export function createQuestions(ctx) {
     const opts = json(question.options)
     return {
       issuedAt,
-      freeUntil: issuedAt + RULES.answerFreeMs[question.difficulty] + extraMs,
-      deadline: issuedAt + RULES.answerLimitMs[question.difficulty] + extraMs,
+      freeUntil: issuedAt + RULES.answerFreeMs[timeOf(question.difficulty)] + extraMs,
+      deadline: issuedAt + RULES.answerLimitMs[timeOf(question.difficulty)] + extraMs,
       hidden: hidden ?? [],
       extraMs,
       golden,
@@ -143,7 +145,7 @@ export function createQuestions(ctx) {
   // Cộng thời gian trả lời câu đang chờ vào tổng của team (tối đa bằng giờ của câu, kể cả giờ thẻ Thêm giờ — hết giờ tính đủ).
   // Gọi trong transaction, trước khi xóa pending_at.
   function addAnswerTime(t, difficulty) {
-    const ms = Math.max(0, Math.min(now() - t.pending_at, RULES.answerLimitMs[difficulty] + t.pending_extra_ms))
+    const ms = Math.max(0, Math.min(now() - t.pending_at, RULES.answerLimitMs[timeOf(difficulty)] + t.pending_extra_ms))
     db.prepare('UPDATE teams SET answer_ms = answer_ms + ? WHERE id = ?').run(ms, t.id)
   }
 

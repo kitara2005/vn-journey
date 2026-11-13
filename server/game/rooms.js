@@ -1,7 +1,7 @@
 // Việc cấp phòng: tạo phòng, tìm phòng, sảnh chờ, vào phòng, dọn dẹp, thống kê, danh sách tỉnh.
 
 import { transaction } from '../db.js'
-import { RULES, TEAM_STYLES, GameError, normalizeText, cleanName } from './rules.js'
+import { RULES, TEAM_STYLES, GameError, normalizeText, cleanName, timeKey } from './rules.js'
 
 export function createRooms(ctx) {
   const { db, q, tram, now, json, provinces, timedOut, defaultDurationMin, newCode, hashSecret, sealSecret, room: roomScope } = ctx
@@ -193,12 +193,12 @@ export function createRooms(ctx) {
 
   // Câu hỏi quá giờ mà team không trả lời: tính là sai. Server gọi định kỳ; trả về id các phòng bị ảnh hưởng.
   function expireQuestions() {
-    const rows = db.prepare(`SELECT t.id, t.room_id, q.difficulty, t.pending_at, t.pending_extra_ms FROM teams t
+    const rows = db.prepare(`SELECT t.id, t.room_id, r.mode, q.difficulty, t.pending_at, t.pending_extra_ms FROM teams t
                              JOIN rooms r ON r.id = t.room_id AND r.status = 'running'
                              JOIN questions q ON q.id = t.pending_question`).all()
     const rooms = new Set()
     for (const r of rows) {
-      if (!timedOut(r.difficulty, r.pending_at, r.pending_extra_ms)) continue
+      if (!timedOut(timeKey(r.difficulty, r.mode), r.pending_at, r.pending_extra_ms)) continue
       roomScope(r.room_id).expireTeam(r.id)
       rooms.add(r.room_id)
     }

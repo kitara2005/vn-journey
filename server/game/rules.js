@@ -71,8 +71,9 @@ export const RULES = {
   textAnswerMaxLength: 100,
   // Giờ trả lời: trong khoảng "không trừ" được đủ điểm; sau đó trừ dần đều vào điểm thưởng,
   // đến hết giờ là trừ 100% điểm tỉnh. Quá giờ (cộng thêm độ trễ mạng) tính là trả lời sai.
-  answerLimitMs: { normal: 30_000, siege: 45_000 },
-  answerFreeMs: { normal: 15_000, siege: 20_000 }, // 29/10: nới từ 10/15 giây — có thời gian đọc và bàn với đồng đội
+  // tram: mọi câu phòng Chạy trạm — trạm tỉnh lẫn map đặc biệt (12/11: chủ dự án chốt 10 giây); xem timeKey
+  answerLimitMs: { normal: 30_000, siege: 45_000, tram: 10_000 },
+  answerFreeMs: { normal: 15_000, siege: 20_000, tram: 5_000 }, // 29/10: nới từ 10/15 giây — có thời gian đọc và bàn với đồng đội
   answerNetworkGraceMs: 2_000,
   // 30/10: đồng hồ câu hỏi bắt đầu sau khi phát câu 1 giây — camera bay tới tỉnh mất ~1 giây, không ăn vào khoảng đủ điểm
   questionLeadMs: 1_000,
@@ -92,8 +93,8 @@ export const RULES = {
   // Số câu phải trả lời đúng ở một tỉnh trống (chủ phòng chọn lúc tạo phòng; 1 = luật gốc). Sai giữa chừng giữ tiến độ
   quizCount: { min: 1, max: 3, default: 1 },
   // Chế độ Chạy trạm (spec 2026-11-09-tram-mode-design.md §3.1); spareHints: cần ≥ keyCount + spareHints tỉnh có gợi ý
-  // lockMs: nghỉ chân khi sai / hết giờ / bỏ qua ở mọi chặng Chạy trạm (trạm tỉnh, câu thời kỳ, ghép mảnh) — ngắn hơn phòng team (30 giây)
-  tram: { keyCount: { min: 3, max: 7, default: 5 }, hintEvery: 3, minDurationMin: 30, specialCount: 3, specialPoints: 500, puzzlePoints: 1000, finishPerMin: 30, lockMs: 15_000, spareHints: 3 },
+  // lockMs: nghỉ chân khi sai / hết giờ / bỏ qua ở mọi chặng Chạy trạm (trạm tỉnh, câu thời kỳ, ghép mảnh) — 12/11: chủ dự án chốt 20 giây
+  tram: { keyCount: { min: 3, max: 7, default: 5 }, hintEvery: 3, minDurationMin: 30, specialCount: 3, specialPoints: 500, puzzlePoints: 1000, finishPerMin: 30, lockMs: 20_000, spareHints: 3 },
   // Câu hỏi lộ tên tỉnh cũ (trước sáp nhập): phòng tram không phát
   tramExcluded: ['hai-phong-03', 'ninh-binh-04', 'dak-lak-02', 'dong-thap-04', 'can-tho-02', 'can-tho-03'],
 }
@@ -151,6 +152,9 @@ export const cleanName = (s, max) => [...String(s ?? '')
   .replace(/\s+/g, ' ').trim()].slice(0, max).join('').trim()
 
 // Điểm bị trừ theo thời gian trả lời (hàm thuần). extraMs: thẻ Thêm giờ — dời cả khoảng được đủ điểm lẫn hạn chót
+// Khóa tra giờ trả lời (answerLimitMs / answerFreeMs) theo độ khó câu + kiểu phòng: câu thường ở phòng Chạy trạm dùng giờ 'tram'
+export const timeKey = (difficulty, mode) => (mode === 'tram' && difficulty === 'normal' ? 'tram' : difficulty)
+
 export function timePenaltyOf(points, difficulty, elapsedMs, extraMs = 0) {
   const free = RULES.answerFreeMs[difficulty] + extraMs, limit = RULES.answerLimitMs[difficulty] + extraMs
   if (elapsedMs <= free) return 0

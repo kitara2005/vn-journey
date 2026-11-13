@@ -175,9 +175,9 @@ export function useHelp(kind) {
 }
 
 // Số giây bị khóa nếu bỏ qua lúc này — cùng công thức server: 10 giây + thời gian đã xem, tối đa = khóa khi sai
-// (Chạy trạm: RULES.tram.lockMs = 15 giây)
+// (Chạy trạm: RULES.tram.lockMs = 20 giây)
 function skipLockSec(since, siege = false) {
-  return Math.min(siege ? 45 : tram() ? 15 : 30, Math.ceil(10 + Math.max(0, now() - since) / 1000))
+  return Math.min(siege ? 45 : tram() ? 20 : 30, Math.ceil(10 + Math.max(0, now() - since) / 1000))
 }
 
 // Nút "Bỏ qua": bấm lần 1 hiện cảnh báo hậu quả, bấm lần 2 (trong 4 giây) mới bỏ qua

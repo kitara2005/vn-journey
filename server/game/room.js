@@ -1,7 +1,7 @@
 // Một phòng: các hàm kiểm tra dùng chung, rồi ghép câu hỏi, hành động team, màn hình và chủ phòng.
 
 import { transaction } from '../db.js'
-import { RULES, GameError } from './rules.js'
+import { RULES, GameError, timeKey } from './rules.js'
 import { createQuestions } from './questions.js'
 import { createActions } from './actions.js'
 import { createViews } from './views.js'
@@ -78,7 +78,9 @@ export function createRoomScope(ctx, roomId) {
     }
   }
 
-  const rctx = { ...ctx, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps, recordBoard, closeRoom: () => owner.closeRoom(), scoreOf: id => scores().find(s => s.teamId === id) }
+  // Hết giờ theo kiểu phòng (câu tỉnh phòng tram ngắn hơn — xem timeKey)
+  const timedOut = (difficulty, issuedAt, extraMs) => ctx.timedOut(timeKey(difficulty, q.room.get(roomId)?.mode), issuedAt, extraMs)
+  const rctx = { ...ctx, timedOut, roomId, log, state, activeEvent, requireRunning, requireTeam, requireIdle, shieldActive, isSolo, isTram, usesStamps, recordBoard, closeRoom: () => owner.closeRoom(), scoreOf: id => scores().find(s => s.teamId === id) }
   const tram = createTram(rctx)
   const questions = createQuestions({ ...rctx, tram })
   const { react, move, retry, chooseTopic, siege, betSiege, settleSiegeBets, retreat, answer, vote, defend, skip, expireTeam, useCard, choiceFor, siegeBlock } = createActions({ ...rctx, ...questions, tram })

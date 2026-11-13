@@ -13,7 +13,7 @@ import { toast } from './notify.js'
 import { now, state } from './state.js'
 
 const POINTS = 500 // điểm câu thời kỳ (RULES.tram.specialPoints), dùng để hiện "còn bao nhiêu điểm"
-const LOCK_S = 15 // nghỉ chân khi sai / hết giờ / bỏ qua (RULES.tram.lockMs)
+const LOCK_S = 20 // nghỉ chân khi sai / hết giờ / bỏ qua (RULES.tram.lockMs)
 const HOLD_MS = 5000 // chờ tối đa chừng này cho khung kết quả / câu cũ trước khi chuyển sang map đặc biệt
 const EXPIRE_GRACE_MS = 2500 // quá hạn chừng này mà câu còn treo thì tự bỏ qua để sang câu khác
 
